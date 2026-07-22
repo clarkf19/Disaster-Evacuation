@@ -1,0 +1,35 @@
+# Target build directories & binaries
+target/
+backend/target/
+*.class
+*.jar
+*.war
+*.ear
+
+# Python caches, virtual environments & OSMnx cache
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+cache/
+.pytest_cache/
+
+# IDE & Editor configurations
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+*.swp
+*.swo
+
+# Log files & OS metadata
+*.log
+tmp/
+*.tmp
+.DS_Store
+Thumbs.db
+Desktop.ini

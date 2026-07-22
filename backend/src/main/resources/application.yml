@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: mumbai-evacuation-system
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+
+server:
+  port: 8080
+
+logging:
+  level:
+    com.mumbai: INFO

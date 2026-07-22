@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Mumbai Disaster Evacuation System</title>
+    <meta name="description" content="Real-time capacity-aware disaster evacuation route planning for Mumbai Metropolitan Region."/>
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+<div id="app">
+    <!-- ======== SIDEBAR ======== -->
+    <aside id="sidebar">
+        <div id="sidebar-header">
+            <div id="logo-row">
+                <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
+                    <circle cx="14" cy="14" r="13" stroke="#f97316" stroke-width="2"/>
+                    <path d="M14 6 L18 20 L14 17 L10 20 Z" fill="#f97316"/>
+                </svg>
+                <h1>Mumbai Evac</h1>
+            </div>
+            <p class="subtitle">Disaster Evacuation Route Planner</p>
+        </div>
+
+        <!-- STATUS BAR -->
+        <div id="status-bar">
+            <div class="stat-pill"><span id="stat-nodes">—</span><small>Nodes</small></div>
+            <div class="stat-pill"><span id="stat-edges">—</span><small>Edges</small></div>
+            <div class="stat-pill"><span id="stat-shelters">—</span><small>Shelters</small></div>
+        </div>
+
+        <!-- ── ROUTE PANEL ── -->
+        <section class="panel" id="route-panel">
+            <h2>Route Planner</h2>
+            <div class="form-group">
+                <label>Source Node <small>(click map to set)</small></label>
+                <input id="source-input" type="number" placeholder="Node ID..."/>
+            </div>
+            <div class="form-group">
+                <label>Destination Node <small>(click map to set)</small></label>
+                <input id="dest-input" type="number" placeholder="Node ID..."/>
+            </div>
+            <button class="btn btn-primary" id="compute-btn" onclick="computeRoute()">Compute Route</button>
+            <button class="btn btn-ghost" onclick="clearRoute()">Clear</button>
+
+            <div id="route-result" class="result-card hidden">
+                <div class="result-row"><span>Distance</span><strong id="res-dist">—</strong></div>
+                <div class="result-row"><span>Travel Time</span><strong id="res-time">—</strong></div>
+                <div class="result-row"><span>Nodes Explored</span><strong id="res-nodes">—</strong></div>
+                <div class="result-row"><span>Computation Time</span><strong id="res-exec">—</strong></div>
+            </div>
+        </section>
+
+        <!-- ── DISASTER PANEL ── -->
+        <section class="panel" id="disaster-panel">
+            <h2>Disaster Events</h2>
+            <div class="form-group">
+                <label>Type</label>
+                <select id="disaster-type">
+                    <option value="FLOOD">Flood</option>
+                    <option value="FIRE">Fire</option>
+                    <option value="BRIDGE_COLLAPSE">Bridge Collapse</option>
+                    <option value="CHEMICAL_LEAK">Chemical Leak</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Radius (meters)</label>
+                <input id="disaster-radius" type="number" value="800" min="100" max="5000"/>
+            </div>
+            <div class="form-group">
+                <label>Action</label>
+                <select id="disaster-action">
+                    <option value="block">Block Roads</option>
+                    <option value="congest">Raise Congestion (3x)</option>
+                </select>
+            </div>
+            <p class="hint">Click on map to place disaster at target location</p>
+            <div id="placing-indicator" class="indicator hidden">Click map to place...</div>
+            <button class="btn btn-danger" id="place-disaster-btn" onclick="startPlacingDisaster()">Place Disaster</button>
+            <button class="btn btn-ghost" onclick="clearAllDisasters()">Clear All</button>
+
+            <div id="active-disasters-list">
+                <!-- populated by JS -->
+            </div>
+        </section>
+
+        <!-- ── SHELTER PANEL ── -->
+        <section class="panel" id="shelter-panel">
+            <h2>Shelters</h2>
+            <button class="btn btn-ghost" id="toggle-shelters-btn" onclick="toggleShelters()">Hide Shelters</button>
+            <div id="shelter-list">
+                <!-- populated by JS -->
+            </div>
+        </section>
+    </aside>
+
+    <!-- ======== MAP ======== -->
+    <main id="map-container">
+        <div id="map"></div>
+        <div id="map-hint">Click map to set <span id="click-mode-label">source</span> node</div>
+        <div id="loading-overlay">
+            <div class="spinner"></div>
+            <p>Loading Mumbai road network...</p>
+        </div>
+    </main>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="js/api.js"></script>
+<script src="js/map.js"></script>
+<script src="js/simulation.js"></script>
+</body>
+</html>
