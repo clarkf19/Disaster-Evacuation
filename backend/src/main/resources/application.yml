@@ -13,3 +13,10 @@ server:
 logging:
   level:
     com.mumbai: INFO
+
+# TomTom Routing API — key stored securely on backend only, never exposed to frontend
+tomtom:
+  api:
+    key: DBrnjTcwBdWE0vXY5hdLZ749gHSPPP6q
+    routing-base-url: https://api.tomtom.com/routing/1/calculateRoute
+    geocode-base-url: https://api.tomtom.com/search/2/reverseGeocode

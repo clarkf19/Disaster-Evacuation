@@ -1,0 +1,127 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.section {
+  padding: 16px;
+  border-bottom: 1px solid var(--panel-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.select, .input {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1.5px solid var(--panel-border);
+  border-radius: 8px;
+  font-size: 0.83rem;
+  color: var(--text-primary);
+  background: #f8fafc;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.select:focus, .input:focus {
+  border-color: var(--google-blue);
+}
+
+.btnDanger {
+  padding: 11px;
+  background: var(--google-red);
+  color: white;
+  border: none;
+  border-radius: 9px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.btnDanger:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(234,67,53,0.35);
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btnSmall {
+  font-size: 0.72rem;
+  padding: 4px 10px;
+  border: 1.5px solid var(--panel-border);
+  border-radius: 6px;
+  background: white;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btnSmall:hover { background: #f1f5f9; }
+
+.empty {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.disasterCard {
+  background: #fff5f5;
+  border: 1.5px solid #fecaca;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.disasterHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.removeBtn {
+  width: 22px; height: 22px;
+  background: #fee2e2;
+  color: #ea4335;
+  border: none;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  cursor: pointer;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.removeBtn:hover { background: #fca5a5; }
+
+.disasterMeta {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}

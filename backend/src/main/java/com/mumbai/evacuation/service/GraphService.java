@@ -94,6 +94,58 @@ public class GraphService {
             coords.add(new double[]{node.getLatitude(), node.getLongitude()});
         }
         response.setRawCoordinates(coords);
+
+        if (!result.isPathFound()) {
+            response.setLiveRouteStatus("UNPASSABLE");
+            response.setLiveAdvisoryMessage("No safe route available due to active road blockages or hazards.");
+            return response;
+        }
+
+        // Calculate free flow travel time vs live dynamic travel time
+        double totalFreeFlowSeconds = 0.0;
+        List<RouteResponse.SegmentDetail> segments = new ArrayList<>();
+        boolean activeDisasterNearby = !disasterEngine.getActiveDisasters().isEmpty();
+
+        for (Edge edge : result.getPathEdges()) {
+            Node src = graph.getNode(edge.getSourceNodeId());
+            Node dst = graph.getNode(edge.getTargetNodeId());
+            if (src != null && dst != null) {
+                segments.add(new RouteResponse.SegmentDetail(
+                    src.getLatitude(), src.getLongitude(),
+                    dst.getLatitude(), dst.getLongitude(),
+                    edge.getCongestionFactor(), edge.getRoadType()
+                ));
+            }
+            double speedMps = (edge.getSpeedLimitKmH() * 1000.0) / 3600.0;
+            totalFreeFlowSeconds += (edge.getDistanceMeters() / speedMps);
+        }
+
+        double freeFlowMins = totalFreeFlowSeconds / 60.0;
+        double liveMins = result.getTotalTravelTimeMinutes();
+        double delayMins = Math.max(0.0, liveMins - freeFlowMins);
+
+        response.setFreeFlowTravelTimeMinutes(freeFlowMins);
+        response.setCongestionDelayMinutes(delayMins);
+        response.setSegmentDetails(segments);
+
+        if (activeDisasterNearby) {
+            response.setLiveRouteStatus("DISASTER_BYPASS");
+            if (delayMins >= 1.0) {
+                response.setLiveAdvisoryMessage(String.format("Live route optimized. Bypassed active disaster hazard zones (+%d mins live traffic delay).", Math.round(delayMins)));
+            } else {
+                response.setLiveAdvisoryMessage("Live route optimized. Bypassed active disaster hazard zones with clear flow.");
+            }
+        } else if (delayMins >= 4.0) {
+            response.setLiveRouteStatus("HEAVY_CONGESTION");
+            response.setLiveAdvisoryMessage(String.format("Heavy live traffic detected. Route dynamically adjusted (+%d mins delay).", Math.round(delayMins)));
+        } else if (delayMins >= 1.0) {
+            response.setLiveRouteStatus("MODERATE_TRAFFIC");
+            response.setLiveAdvisoryMessage(String.format("Moderate live traffic. Safest route recommended (+%d min delay).", Math.round(delayMins)));
+        } else {
+            response.setLiveRouteStatus("CLEAR");
+            response.setLiveAdvisoryMessage("Live route clear. Optimal evacuation corridor with free-flow speed.");
+        }
+
         return response;
     }
 

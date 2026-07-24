@@ -75,8 +75,16 @@ public class Edge {
         return currentTraffic;
     }
 
-    public void setCurrentTraffic(int currentTraffic) {
+    public synchronized void setCurrentTraffic(int currentTraffic) {
         this.currentTraffic = Math.max(0, currentTraffic);
+    }
+
+    public synchronized void addTraffic(int count) {
+        this.currentTraffic = Math.max(0, this.currentTraffic + count);
+    }
+
+    public synchronized void resetTraffic() {
+        this.currentTraffic = 0;
     }
 
     public boolean isBlocked() {

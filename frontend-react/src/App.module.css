@@ -1,0 +1,202 @@
+.appContainer {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-light);
+}
+
+.sidebar {
+  width: 420px;
+  height: 100%;
+  background: var(--panel-bg);
+  border-right: 1px solid var(--panel-border);
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  box-shadow: var(--shadow-lg);
+}
+
+.sidebarHeader {
+  padding: 16px 20px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--panel-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logoRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logoIcon {
+  font-size: 1.6rem;
+  background: var(--google-blue-light);
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebarHeader h1 {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.liveBadge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--google-green);
+  background: var(--google-green-light);
+  padding: 5px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.liveDot {
+  width: 7px;
+  height: 7px;
+  background: var(--google-green);
+  border-radius: 50%;
+  animation: livePulse 1.5s infinite;
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+
+.statusBar {
+  display: flex;
+  gap: 12px;
+  padding: 12px 20px;
+  background: #f1f5f9;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.kpiCard {
+  flex: 1;
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--panel-border);
+}
+
+.kpiValue {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--google-blue);
+}
+
+.accentGreen {
+  color: var(--google-green) !important;
+}
+
+.kpiLabel {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.tabNav {
+  display: flex;
+  padding: 8px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--panel-border);
+  gap: 6px;
+}
+
+.tabBtn {
+  flex: 1;
+  padding: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tabBtn:hover {
+  background: #f1f5f9;
+  color: var(--text-primary);
+}
+
+.activeTab {
+  background: var(--google-blue-light) !important;
+  color: var(--google-blue) !important;
+  font-weight: 700;
+}
+
+.tabContent {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.mapContainer {
+  flex: 1;
+  height: 100%;
+  position: relative;
+}
+
+.mapClickHint {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ffffff;
+  border: 1.5px solid var(--google-blue);
+  box-shadow: var(--shadow-lg);
+  padding: 10px 18px;
+  border-radius: 30px;
+  font-size: 0.84rem;
+  color: var(--text-primary);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: bounce 1s infinite alternate;
+}
+
+@keyframes bounce {
+  from { transform: translate(-50%, 0); }
+  to   { transform: translate(-50%, -4px); }
+}
+
+.cancelClickBtn {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.cancelClickBtn:hover {
+  background: #e2e8f0;
+  color: var(--google-red);
+}

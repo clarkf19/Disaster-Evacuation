@@ -1,0 +1,98 @@
+/* ==========================================================================
+   Mumbai Evacuation System — React — Google Maps Light Theme
+   ========================================================================== */
+
+:root {
+  --google-blue: #1a73e8;
+  --google-blue-hover: #1557b0;
+  --google-blue-light: #e8f0fe;
+  --google-green: #34a853;
+  --google-green-light: #e6f4ea;
+  --google-red: #ea4335;
+  --google-red-light: #fce8e6;
+  --google-yellow: #fbbc04;
+  --google-yellow-light: #fef7e0;
+  --accent-orange: #f97316;
+  --panel-bg: #ffffff;
+  --panel-border: #e2e8f0;
+  --bg-light: #f8fafc;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 10px 25px -5px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text-primary);
+  background: var(--bg-light);
+}
+
+/* Leaflet map fix */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  font-family: inherit;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+/* Popup customization */
+.leaflet-popup-content-wrapper {
+  border-radius: var(--radius-sm) !important;
+  box-shadow: var(--shadow-md) !important;
+  font-family: 'Inter', sans-serif !important;
+}
+.leaflet-popup-content { font-size: 0.8rem; line-height: 1.5; }
+.popup-title { font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+.popup-sub { color: var(--text-secondary); }
+
+/* Custom Marker Styles */
+.shelter-marker {
+  background: white;
+  border: 2.5px solid var(--google-green);
+  border-radius: 50%;
+  width: 36px !important;
+  height: 36px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  box-shadow: var(--shadow-md);
+  position: relative;
+}
+.shelter-marker.warning { border-color: var(--accent-orange); }
+.shelter-marker.danger { border-color: var(--google-red); }
+
+.pin-marker {
+  background: var(--google-blue);
+  border: 3px solid white;
+  border-radius: 50% 50% 50% 0;
+  width: 28px !important;
+  height: 28px !important;
+  transform: rotate(-45deg);
+  box-shadow: var(--shadow-md);
+}
+.pin-marker.dest { background: var(--google-red); }
+
+/* Disaster marker */
+.disaster-marker-icon {
+  background: none;
+  border: none;
+}
