@@ -18,10 +18,12 @@
   line-height: 1.4;
 }
 
-.locationRow {
+/* ── Location group (label + input row + dropdown) ── */
+.locationGroup {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
+  position: relative;
 }
 
 .locationLabel {
@@ -30,61 +32,310 @@
   color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-}
-
-.locationBtn {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 5px;
+}
+
+.locationIcon {
+  font-size: 0.9rem;
+}
+
+/* Row containing: text input + map pin btn + gps btn */
+.inputRow {
+  display: flex;
+  align-items: stretch;
+  gap: 5px;
+}
+
+.inputWrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.2s, outline 0.2s;
+  position: relative;
+}
+
+.inputWrap:focus-within {
+  border-color: #1a73e8;
+  background: #fff;
+}
+
+.locationInput {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
   padding: 10px 12px;
+  font-size: 0.84rem;
+  font-family: inherit;
+  color: #1e293b;
+  min-width: 0;
+}
+
+.locationInput::placeholder {
+  color: #94a3b8;
+}
+
+.spinnerInline {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #e2e8f0;
+  border-top-color: #1a73e8;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+  margin-right: 10px;
+  display: inline-block;
+}
+
+/* Map pin button */
+.mapPinBtn {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
   border: 1.5px solid #e2e8f0;
   border-radius: 10px;
   background: #f8fafc;
   cursor: pointer;
-  transition: all 0.2s;
-  text-align: left;
-  width: 100%;
-  position: relative;
-  overflow: hidden;
-}
-
-.locationBtn:hover {
-  border-color: #cbd5e1;
-  background: #fff;
-}
-
-.locationBtnActive {
-  background: #ffffff;
-}
-
-.locationIcon {
   font-size: 1rem;
+  transition: all 0.18s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mapPinBtn:hover {
+  background: #e8f0fe;
+  border-color: #1a73e8;
+}
+
+.mapPinActive {
+  border-color: transparent;
+  transform: scale(1.05);
+}
+
+/* GPS button */
+.gpsBtn {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.18s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gpsBtn:hover:not(:disabled) {
+  background: #e6f4ea;
+  border-color: #34a853;
+}
+
+.gpsBtn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* ── Autocomplete dropdown ── */
+.dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  list-style: none;
+  padding: 4px;
+  margin: 4px 0 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.dropdownItem:hover {
+  background: #f1f5f9;
+}
+
+.suggIcon {
+  font-size: 0.9rem;
   flex-shrink: 0;
 }
 
-.locationText {
-  font-size: 0.83rem;
+.suggName {
+  font-size: 0.82rem;
+  color: #1e293b;
   font-weight: 500;
-  flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.pulsing {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  animation: pulse 1.2s infinite;
-  flex-shrink: 0;
+/* ── Evacuate Shelter Toggle Button ── */
+.shelterToggleBtn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  background: #f0fdf4;
+  border: 1.5px solid #bbf7d0;
+  border-radius: 10px;
+  color: #166534;
+  font-size: 0.81rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+  margin-top: 2px;
 }
 
-@keyframes pulse {
-  0%   { opacity: 1; transform: scale(0.95); }
-  50%  { opacity: 0.5; transform: scale(1.1); }
-  100% { opacity: 1; transform: scale(0.95); }
+.shelterToggleBtn:hover {
+  background: #dcfce7;
+  border-color: #86efac;
 }
 
+.shelterToggleActive {
+  background: #166534;
+  color: white;
+  border-color: #166534;
+}
+
+.shelterCount {
+  background: rgba(0,0,0,0.08);
+  padding: 2px 7px;
+  border-radius: 12px;
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
+.shelterToggleActive .shelterCount {
+  background: rgba(255,255,255,0.25);
+  color: white;
+}
+
+/* ── Shelter Picker List ── */
+.shelterPicker {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+}
+
+.shelterPickerHeader {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.shelterSearch {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  outline: none;
+  font-family: inherit;
+}
+
+.shelterSearch:focus {
+  border-color: #166534;
+}
+
+.shelterPickerList {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shelterItem {
+  padding: 8px 10px;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.shelterItem:hover {
+  border-color: #cbd5e1;
+  background: #fff;
+}
+
+.shelterItemSelected {
+  border-color: #166534;
+  background: #f0fdf4;
+}
+
+.shelterItemTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.shelterItemName {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+}
+
+.shelterItemBadge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.shelterItemBar {
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.shelterItemMeta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+.shelterItemCheck {
+  color: #166534;
+  font-weight: 700;
+}
+
+/* ── Tip bar ── */
 .tip {
   font-size: 0.76rem;
   color: #1a73e8;
@@ -106,10 +357,12 @@
   line-height: 1.4;
 }
 
+/* ── Action buttons ── */
 .buttons {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-top: 2px;
 }
 
 .btnPrimary {
@@ -155,6 +408,7 @@
   color: #1e293b;
 }
 
+/* ── Spinner ── */
 .spinner {
   width: 14px;
   height: 14px;

@@ -10,23 +10,26 @@ const BACKEND = '/api';
 
 /**
  * Calculate a live traffic-aware route via the backend proxy.
- * No API key in the frontend at all.
  */
 export async function calcLiveRoute(fromLat, fromLon, toLat, toLon) {
-  const res = await fetch(`${BACKEND}/live-route`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fromLat, fromLon, toLat, toLon }),
-  });
+  try {
+    const res = await fetch(`${BACKEND}/live-route`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fromLat, fromLon, toLat, toLon }),
+    });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.message || `Route calculation failed (${res.status})`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.message || `Route calculation failed (${res.status})`);
+    }
+
+    const data = await res.json();
+    return normalizeResponse(data);
+  } catch (e) {
+    console.error('Error in calcLiveRoute:', e);
+    throw e;
   }
-
-  const data = await res.json();
-  if (!data.pathFound) throw new Error('No route found between selected points.');
-  return normalizeResponse(data);
 }
 
 /**
@@ -38,37 +41,63 @@ export async function reverseGeocode(lat, lon) {
     if (!res.ok) return coordinateLabel(lat, lon);
     const data = await res.json();
     return data.name || coordinateLabel(lat, lon);
-  } catch (_) {
+  } catch (e) {
+    console.warn('Reverse geocode error, returning raw coordinates:', e);
     return coordinateLabel(lat, lon);
   }
 }
 
+/**
+ * Forward geocode — search for places by name near a bias point.
+ * Returns up to 6 suggestions: [{ name, lat, lon, type }]
+ */
+export async function searchPlaces(query, biasLat = 19.076, biasLon = 72.8777) {
+  if (!query || query.trim().length < 2) return [];
+  try {
+    const res = await fetch(
+      `${BACKEND}/search?q=${encodeURIComponent(query)}&lat=${biasLat}&lon=${biasLon}`
+    );
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (e) {
+    console.warn('Place search error:', e);
+    return [];
+  }
+}
+
 function coordinateLabel(lat, lon) {
-  return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+  return `${Number(lat).toFixed(4)}, ${Number(lon).toFixed(4)}`;
 }
 
 /**
  * Normalize backend LiveRouteResponse into shape used by React components.
- * Backend uses camelCase matching the Java DTO field names.
+ * Retains 100% of the turn-by-turn road geometry points per segment.
  */
 function normalizeResponse(data) {
   const status = data.liveStatus || 'CLEAR';
 
-  // Build segment array for map polyline coloring
+  // Build segment array preserving full road turn coordinates (seg.points)
   const segments = (data.segments || []).map(seg => ({
-    points: [[seg.startLat, seg.startLon], [seg.endLat, seg.endLon]],
+    points: (seg.points && seg.points.length > 0)
+      ? seg.points
+      : [[seg.startLat, seg.startLon], [seg.endLat, seg.endLon]],
     congestion: factorToCongestion(seg.congestionFactor),
   }));
 
+  // Ensure overall route points exist
+  const points = (data.routeCoordinates && data.routeCoordinates.length > 0)
+    ? data.routeCoordinates
+    : [];
+
   return {
-    found: true,
-    distanceKm:      data.distanceKm,
-    liveMinutes:     data.liveTravelTimeMinutes,
-    freeFlowMinutes: data.freeFlowTravelTimeMinutes,
-    delayMinutes:    data.delayMinutes,
+    found: data.pathFound ?? true,
+    distanceKm:      data.distanceKm ?? 0,
+    liveMinutes:     data.liveTravelTimeMinutes ?? 0,
+    freeFlowMinutes: data.freeFlowTravelTimeMinutes ?? 0,
+    delayMinutes:    data.delayMinutes ?? 0,
     liveStatus:      status,
-    advisoryMessage: data.advisoryMessage,
-    points:          data.routeCoordinates || [],
+    advisoryMessage: data.advisoryMessage || 'Route calculation complete.',
+    points,
     segments,
   };
 }

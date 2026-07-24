@@ -13,12 +13,13 @@ public class LiveRouteResponse {
     private int liveTravelTimeMinutes;
     private int freeFlowTravelTimeMinutes;
     private int delayMinutes;
-    private String liveStatus;        // CLEAR | SLOW_TRAFFIC | MODERATE_TRAFFIC | HEAVY_CONGESTION
+    private String liveStatus;        // CLEAR | SLOW_TRAFFIC | MODERATE_TRAFFIC | HEAVY_CONGESTION | DISASTER_BYPASS
     private String advisoryMessage;
     private List<double[]> routeCoordinates;  // [[lat, lon], ...]
     private List<SegmentInfo> segments;
 
     public static class SegmentInfo {
+        private List<double[]> points; // Full array of [lat, lon] road coordinates along this section
         private double startLat;
         private double startLon;
         private double endLat;
@@ -26,6 +27,20 @@ public class LiveRouteResponse {
         private double congestionFactor; // 1.0=clear, 1.3=slow, 1.7=moderate, 2.5=heavy
 
         public SegmentInfo() {}
+
+        public SegmentInfo(List<double[]> points, double congestionFactor) {
+            this.points = points;
+            if (points != null && !points.isEmpty()) {
+                this.startLat = points.get(0)[0];
+                this.startLon = points.get(0)[1];
+                this.endLat = points.get(points.size() - 1)[0];
+                this.endLon = points.get(points.size() - 1)[1];
+            }
+            this.congestionFactor = congestionFactor;
+        }
+
+        public List<double[]> getPoints() { return points; }
+        public void setPoints(List<double[]> points) { this.points = points; }
 
         public double getStartLat() { return startLat; }
         public void setStartLat(double startLat) { this.startLat = startLat; }

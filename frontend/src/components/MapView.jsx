@@ -163,6 +163,7 @@ export default function MapView({
   routeResult,
   shelters,
   disasters,
+  onSelectShelter,
 }) {
   return (
     <MapContainer
@@ -239,6 +240,25 @@ export default function MapView({
               <div className="popup-sub">
                 Available: <b>{s.remainingCapacity?.toLocaleString()}</b>
               </div>
+              {onSelectShelter && (
+                <button
+                  style={{
+                    marginTop: '8px',
+                    width: '100%',
+                    padding: '6px 8px',
+                    background: '#166534',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => onSelectShelter(s)}
+                >
+                  📍 Evacuate Here
+                </button>
+              )}
             </Popup>
           </Marker>
         );

@@ -1,19 +1,10 @@
-import { useState } from 'react';
-import { calcLiveRoute, reverseGeocode } from '../services/tomtomApi';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { calcLiveRoute, reverseGeocode, searchPlaces } from '../services/tomtomApi';
 import LiveAdvisoryCard from './LiveAdvisoryCard';
 import styles from './RoutePlanner.module.css';
 
-/**
- * RoutePlanner — sidebar panel for live traffic-aware point-to-point routing.
- *
- * Interaction model:
- *  1. User clicks "Set Start" → next map click sets source lat/lon
- *  2. User clicks "Set Destination" → next map click sets dest lat/lon
- *  3. "Calculate Live Route" triggers TomTom API → draws colored polyline on map
- *
- * The parent App passes clickMode state management so MapView knows what to do
- * when the user clicks the map.
- */
+const MUMBAI_CENTER = { lat: 19.076, lon: 72.8777 };
+
 export default function RoutePlanner({
   clickMode,
   setClickMode,
@@ -21,15 +12,20 @@ export default function RoutePlanner({
   dest,
   onClear,
   onRouteResult,
+  onSourceSet,
+  onDestSet,
   hasDisaster,
   routeResult,
+  shelters = [],
 }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError]   = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState('');
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [shelterMode, setShelterMode] = useState(false); // show shelter picker for destination
 
   async function handleCompute() {
     if (!source || !dest) {
-      setError('Please select both a start and destination point on the map.');
+      setError('Please set both a start and destination location.');
       return;
     }
     setError('');
@@ -45,46 +41,103 @@ export default function RoutePlanner({
     }
   }
 
+  async function handleGpsLocation() {
+    if (!navigator.geolocation) {
+      setError('GPS not available in your browser.');
+      return;
+    }
+    setGpsLoading(true);
+    setError('');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const name = await reverseGeocode(latitude, longitude);
+        onSourceSet({ lat: latitude, lon: longitude, name });
+        setGpsLoading(false);
+      },
+      () => {
+        setError('Could not access your location. Please allow location access or set it manually.');
+        setGpsLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }
+
+  function handleShelterPick(s) {
+    const pct = Math.min(100, Math.round((s.currentOccupancy / s.totalCapacity) * 100));
+    onDestSet({ lat: s.lat, lon: s.lon, name: `${s.name} (${pct}% full)` });
+    setShelterMode(false);
+  }
+
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
         <h2>Live Route Planner</h2>
-        <p className={styles.sub}>Click the map to set points, then calculate your live route.</p>
+        <p className={styles.sub}>Set locations by typing, using GPS, or clicking the map.</p>
       </div>
 
-      {/* Source Input */}
-      <LocationRow
+      {/* ── Source ── */}
+      <LocationSearch
         label="Start Location"
-        placeholder="Click map to set start..."
-        value={source?.name}
-        active={clickMode === 'source'}
-        color="var(--google-blue)"
         icon="🔵"
-        onClick={() => setClickMode(clickMode === 'source' ? null : 'source')}
+        color="var(--google-blue)"
+        value={source}
+        onSelect={onSourceSet}
+        clickModeKey="source"
+        clickMode={clickMode}
+        setClickMode={setClickMode}
+        biasLat={source?.lat || MUMBAI_CENTER.lat}
+        biasLon={source?.lon || MUMBAI_CENTER.lon}
+        gpsSlot={
+          <button
+            className={styles.gpsBtn}
+            onClick={handleGpsLocation}
+            disabled={gpsLoading}
+            title="Use my live GPS location"
+          >
+            {gpsLoading ? <span className={styles.spinner} /> : '📡'}
+          </button>
+        }
       />
 
-      {/* Destination Input */}
-      <LocationRow
+      {/* ── Destination ── */}
+      <LocationSearch
         label="Destination"
-        placeholder="Click map to set destination..."
-        value={dest?.name}
-        active={clickMode === 'dest'}
-        color="var(--google-red)"
         icon="🔴"
-        onClick={() => setClickMode(clickMode === 'dest' ? null : 'dest')}
+        color="var(--google-red)"
+        value={dest}
+        onSelect={onDestSet}
+        clickModeKey="dest"
+        clickMode={clickMode}
+        setClickMode={setClickMode}
+        biasLat={source?.lat || MUMBAI_CENTER.lat}
+        biasLon={source?.lon || MUMBAI_CENTER.lon}
       />
 
-      {/* Tip */}
+      {/* ── Evacuate to Shelter button ── */}
+      <button
+        className={`${styles.shelterToggleBtn} ${shelterMode ? styles.shelterToggleActive : ''}`}
+        onClick={() => setShelterMode(v => !v)}
+      >
+        <span>⛺</span>
+        {shelterMode ? 'Hide Shelter List' : 'Evacuate → Choose Nearest Shelter'}
+        <span className={styles.shelterCount}>{shelters.length}</span>
+      </button>
+
+      {/* ── Shelter picker list ── */}
+      {shelterMode && (
+        <ShelterPicker shelters={shelters} onSelect={handleShelterPick} selectedDest={dest} />
+      )}
+
+      {/* Map-click tip */}
       {(clickMode === 'source' || clickMode === 'dest') && (
         <div className={styles.tip}>
-          <span>📍</span> Click anywhere on the map to set your {clickMode === 'source' ? 'start' : 'destination'}
+          <span>📍</span> Click anywhere on the map to pin your {clickMode === 'source' ? 'start' : 'destination'}
         </div>
       )}
 
-      {/* Error */}
       {error && <p className={styles.error}>{error}</p>}
 
-      {/* Action buttons */}
       <div className={styles.buttons}>
         <button
           className={styles.btnPrimary}
@@ -99,13 +152,12 @@ export default function RoutePlanner({
         </button>
 
         {(source || dest || routeResult) && (
-          <button className={styles.btnGhost} onClick={onClear}>
+          <button className={styles.btnGhost} onClick={() => { onClear(); setShelterMode(false); }}>
             Clear Route
           </button>
         )}
       </div>
 
-      {/* Live Advisory Result */}
       {routeResult && !loading && (
         <LiveAdvisoryCard result={routeResult} hasDisaster={hasDisaster} />
       )}
@@ -113,21 +165,169 @@ export default function RoutePlanner({
   );
 }
 
-function LocationRow({ label, placeholder, value, active, color, icon, onClick }) {
+/* ─────────────────────────────────────────────────────────
+   ShelterPicker — sorted list of shelters the user can
+   select to auto-fill as destination
+───────────────────────────────────────────────────────── */
+function ShelterPicker({ shelters, onSelect, selectedDest }) {
+  const [query, setQuery] = useState('');
+
+  const sorted = [...shelters]
+    .map(s => ({
+      ...s,
+      pct: Math.min(100, Math.round((s.currentOccupancy / s.totalCapacity) * 100)),
+    }))
+    .sort((a, b) => a.pct - b.pct); // least full first
+
+  const filtered = query.trim()
+    ? sorted.filter(s => s.name.toLowerCase().includes(query.toLowerCase()))
+    : sorted;
+
   return (
-    <div className={styles.locationRow}>
-      <label className={styles.locationLabel}>{label}</label>
-      <button
-        className={`${styles.locationBtn} ${active ? styles.locationBtnActive : ''}`}
-        onClick={onClick}
-        style={active ? { borderColor: color, boxShadow: `0 0 0 3px ${color}22` } : {}}
-      >
+    <div className={styles.shelterPicker}>
+      <div className={styles.shelterPickerHeader}>
+        <span>⛺ Select an evacuation shelter as destination</span>
+      </div>
+      <input
+        className={styles.shelterSearch}
+        type="text"
+        placeholder="Filter shelters..."
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+      />
+      <div className={styles.shelterPickerList}>
+        {filtered.map(s => {
+          const barColor = s.pct >= 90 ? '#ea4335' : s.pct >= 70 ? '#f97316' : '#34a853';
+          const isSelected = selectedDest?.name?.startsWith(s.name);
+          return (
+            <div
+              key={s.id || s.name}
+              className={`${styles.shelterItem} ${isSelected ? styles.shelterItemSelected : ''}`}
+              onClick={() => onSelect(s)}
+            >
+              <div className={styles.shelterItemTop}>
+                <span className={styles.shelterItemName}>{s.name}</span>
+                <span className={styles.shelterItemBadge} style={{ color: barColor, background: `${barColor}18` }}>
+                  {s.pct}%
+                </span>
+              </div>
+              <div className={styles.shelterItemBar}>
+                <div style={{ width: `${s.pct}%`, backgroundColor: barColor, height: '100%', borderRadius: 4 }} />
+              </div>
+              <div className={styles.shelterItemMeta}>
+                <span>{s.remainingCapacity?.toLocaleString()} spots available</span>
+                {isSelected && <span className={styles.shelterItemCheck}>✓ Selected</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   LocationSearch — smart input: type → autocomplete,
+   pin button → map click, GPS button (source only)
+───────────────────────────────────────────────────────── */
+function LocationSearch({
+  label, icon, color,
+  value, onSelect,
+  clickModeKey, clickMode, setClickMode,
+  biasLat, biasLon,
+  gpsSlot,
+}) {
+  const [query, setQuery]           = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [open, setOpen]             = useState(false);
+  const [searching, setSearching]   = useState(false);
+  const debounceRef = useRef(null);
+  const wrapRef     = useRef(null);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  useEffect(() => {
+    if (value?.name) setQuery(value.name);
+  }, [value?.name]);
+
+  const handleInputChange = useCallback((e) => {
+    const val = e.target.value;
+    setQuery(val);
+    setOpen(true);
+    clearTimeout(debounceRef.current);
+    if (val.trim().length < 2) { setSuggestions([]); return; }
+    setSearching(true);
+    debounceRef.current = setTimeout(async () => {
+      const results = await searchPlaces(val, biasLat, biasLon);
+      setSuggestions(results);
+      setSearching(false);
+    }, 320);
+  }, [biasLat, biasLon]);
+
+  function handleSuggestionClick(s) {
+    onSelect({ lat: s.lat, lon: s.lon, name: s.name });
+    setQuery(s.name);
+    setSuggestions([]);
+    setOpen(false);
+  }
+
+  function handleMapPin() {
+    setClickMode(clickMode === clickModeKey ? null : clickModeKey);
+    setOpen(false);
+  }
+
+  const isMapActive = clickMode === clickModeKey;
+
+  return (
+    <div className={styles.locationGroup} ref={wrapRef}>
+      <label className={styles.locationLabel}>
         <span className={styles.locationIcon}>{icon}</span>
-        <span className={styles.locationText} style={{ color: value ? '#1e293b' : '#94a3b8' }}>
-          {value || placeholder}
-        </span>
-        {active && <span className={styles.pulsing} style={{ backgroundColor: color }} />}
-      </button>
+        {label}
+      </label>
+      <div className={styles.inputRow}>
+        <div className={styles.inputWrap} style={isMapActive ? { outline: `2px solid ${color}` } : {}}>
+          <input
+            className={styles.locationInput}
+            type="text"
+            placeholder="Type a location or click map..."
+            value={query}
+            onChange={handleInputChange}
+            onFocus={() => { if (suggestions.length > 0) setOpen(true); }}
+            autoComplete="off"
+          />
+          {searching && <span className={styles.spinnerInline} />}
+        </div>
+        <button
+          className={`${styles.mapPinBtn} ${isMapActive ? styles.mapPinActive : ''}`}
+          onClick={handleMapPin}
+          title="Click to pin on map"
+          style={isMapActive ? { background: color, color: '#fff' } : {}}
+        >
+          📍
+        </button>
+        {gpsSlot}
+      </div>
+
+      {open && suggestions.length > 0 && (
+        <ul className={styles.dropdown}>
+          {suggestions.map((s, i) => (
+            <li
+              key={i}
+              className={styles.dropdownItem}
+              onMouseDown={() => handleSuggestionClick(s)}
+            >
+              <span className={styles.suggIcon}>{s.type === 'POI' ? '🏢' : '📍'}</span>
+              <span className={styles.suggName}>{s.name}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

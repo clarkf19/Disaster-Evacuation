@@ -1,7 +1,7 @@
 import React from 'react';
 import styles from './ShelterPanel.module.css';
 
-export default function ShelterPanel({ shelters }) {
+export default function ShelterPanel({ shelters, onSelectShelter }) {
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
@@ -46,6 +46,14 @@ export default function ShelterPanel({ shelters }) {
                     style={{ width: `${pct}%`, backgroundColor: barColor }}
                   />
                 </div>
+                {onSelectShelter && (
+                  <button
+                    className={styles.navBtn}
+                    onClick={() => onSelectShelter(s)}
+                  >
+                    📍 Set as Evacuation Destination
+                  </button>
+                )}
               </div>
             );
           })

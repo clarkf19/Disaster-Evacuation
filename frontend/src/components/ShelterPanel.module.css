@@ -88,3 +88,23 @@
   border-radius: 3px;
   transition: width 0.4s ease;
 }
+
+.navBtn {
+  margin-top: 4px;
+  padding: 7px 10px;
+  background: #f0fdf4;
+  border: 1.5px solid #bbf7d0;
+  border-radius: 8px;
+  color: #166534;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.navBtn:hover {
+  background: #166534;
+  color: white;
+  border-color: #166534;
+}

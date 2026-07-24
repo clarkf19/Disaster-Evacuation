@@ -91,6 +91,28 @@ export default function App() {
     setClickMode(null);
   }
 
+  // Called by RoutePlanner when GPS or text search sets a point directly
+  function handleSourceSet(point) {
+    setSource(point);
+    setClickMode(null);
+  }
+
+  function handleDestSet(point) {
+    setDest(point);
+    setClickMode(null);
+  }
+
+  // Called when user selects a shelter from ShelterPanel or MapView popup
+  function handleSelectShelter(shelter) {
+    const pct = Math.min(100, Math.round((shelter.currentOccupancy / shelter.totalCapacity) * 100));
+    setDest({
+      lat: shelter.lat,
+      lon: shelter.lon,
+      name: `${shelter.name} (${pct}% full)`,
+    });
+    setActiveTab('route');
+  }
+
   return (
     <div className={styles.appContainer}>
       {/* ======== SIDEBAR ======== */}
@@ -157,8 +179,11 @@ export default function App() {
               dest={dest}
               onClear={handleClearRoute}
               onRouteResult={setRouteResult}
+              onSourceSet={handleSourceSet}
+              onDestSet={handleDestSet}
               hasDisaster={disasters.length > 0}
               routeResult={routeResult}
+              shelters={shelters}
             />
           )}
           {activeTab === 'disasters' && (
@@ -169,7 +194,7 @@ export default function App() {
             />
           )}
           {activeTab === 'shelters' && (
-            <ShelterPanel shelters={shelters} />
+            <ShelterPanel shelters={shelters} onSelectShelter={handleSelectShelter} />
           )}
         </div>
       </aside>
@@ -184,6 +209,7 @@ export default function App() {
           routeResult={routeResult}
           shelters={shelters}
           disasters={disasters}
+          onSelectShelter={handleSelectShelter}
         />
         {clickMode && clickMode !== 'disaster' && (
           <div className={styles.mapClickHint}>
