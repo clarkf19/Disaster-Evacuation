@@ -71,9 +71,9 @@ profile_default/
 ipython_config.py
 
 
-# ── Node.js / React / Vite ──────────────────────────────────
+# ── Node.js / React / Vite (Single Frontend under /frontend) ─
 node_modules/
-frontend-react/node_modules/
+frontend/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -81,9 +81,9 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # Vite build output
-frontend-react/dist/
-frontend-react/dist-ssr/
-frontend-react/.vite/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
 *.local
 
 # Storybook / testing
