@@ -154,41 +154,85 @@
   z-index: 9999;
   background: #fff;
   border: 1.5px solid #e2e8f0;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.08);
   list-style: none;
-  padding: 4px;
-  margin: 4px 0 0;
-  max-height: 220px;
+  padding: 6px;
+  margin: 5px 0 0;
+  max-height: 380px;
   overflow-y: auto;
 }
+
+.dropdown::-webkit-scrollbar {
+  width: 5px;
+}
+.dropdown::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 
 .dropdownItem {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
+  gap: 10px;
+  padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.12s;
+  border-bottom: 1px solid #f1f5f9;
 }
 
-.dropdownItem:hover {
-  background: #f1f5f9;
+.dropdownItem:last-child {
+  border-bottom: none;
 }
 
-.suggIcon {
-  font-size: 0.9rem;
+.dropdownItem:hover, .dropdownItemSelected {
+  background: #e8f0fe;
+}
+
+.suggIconWrap {
+  font-size: 1.1rem;
   flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dropdownItemSelected .suggIconWrap {
+  background: #d2e3fc;
+}
+
+.suggTextWrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
 }
 
 .suggName {
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   color: #1e293b;
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.suggSubText {
+  font-size: 0.72rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
 }
 
 /* ── Evacuate Shelter Toggle Button ── */

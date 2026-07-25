@@ -3,6 +3,7 @@ import MapView from './components/MapView';
 import RoutePlanner from './components/RoutePlanner';
 import DisasterPanel from './components/DisasterPanel';
 import ShelterPanel from './components/ShelterPanel';
+import EmergencyChatbot from './components/EmergencyChatbot';
 import { reverseGeocode } from './services/tomtomApi';
 import * as API from './services/backendApi';
 import styles from './App.module.css';
@@ -227,6 +228,9 @@ export default function App() {
             </button>
           </div>
         )}
+
+        {/* Emergency AI Assistant Chatbot Widget */}
+        <EmergencyChatbot />
       </main>
     </div>
   );

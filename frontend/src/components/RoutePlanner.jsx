@@ -237,10 +237,11 @@ function LocationSearch({
   biasLat, biasLon,
   gpsSlot,
 }) {
-  const [query, setQuery]           = useState('');
+  const [query, setQuery]             = useState('');
   const [suggestions, setSuggestions] = useState([]);
-  const [open, setOpen]             = useState(false);
-  const [searching, setSearching]   = useState(false);
+  const [open, setOpen]               = useState(false);
+  const [searching, setSearching]     = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const debounceRef = useRef(null);
   const wrapRef     = useRef(null);
 
@@ -260,21 +261,39 @@ function LocationSearch({
     const val = e.target.value;
     setQuery(val);
     setOpen(true);
+    setSelectedIndex(-1);
     clearTimeout(debounceRef.current);
     if (val.trim().length < 2) { setSuggestions([]); return; }
     setSearching(true);
     debounceRef.current = setTimeout(async () => {
-      const results = await searchPlaces(val, biasLat, biasLon);
+      const results = await searchPlaces(val);
       setSuggestions(results);
       setSearching(false);
-    }, 320);
-  }, [biasLat, biasLon]);
+    }, 280);
+  }, []);
+
 
   function handleSuggestionClick(s) {
     onSelect({ lat: s.lat, lon: s.lon, name: s.name });
     setQuery(s.name);
     setSuggestions([]);
     setOpen(false);
+  }
+
+  function handleKeyDown(e) {
+    if (!open || suggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev < suggestions.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev > 0 ? prev - 1 : suggestions.length - 1));
+    } else if (e.key === 'Enter' && selectedIndex >= 0 && selectedIndex < suggestions.length) {
+      e.preventDefault();
+      handleSuggestionClick(suggestions[selectedIndex]);
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+    }
   }
 
   function handleMapPin() {
@@ -295,9 +314,10 @@ function LocationSearch({
           <input
             className={styles.locationInput}
             type="text"
-            placeholder="Type a location or click map..."
+            placeholder="Type any location in Mumbai or click map..."
             value={query}
             onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
             onFocus={() => { if (suggestions.length > 0) setOpen(true); }}
             autoComplete="off"
           />
@@ -319,11 +339,16 @@ function LocationSearch({
           {suggestions.map((s, i) => (
             <li
               key={i}
-              className={styles.dropdownItem}
+              className={`${styles.dropdownItem} ${i === selectedIndex ? styles.dropdownItemSelected : ''}`}
               onMouseDown={() => handleSuggestionClick(s)}
             >
-              <span className={styles.suggIcon}>{s.type === 'POI' ? '🏢' : '📍'}</span>
-              <span className={styles.suggName}>{s.name}</span>
+              <div className={styles.suggIconWrap}>
+                {s.icon || (s.type === 'POI' ? '🏢' : '📍')}
+              </div>
+              <div className={styles.suggTextWrap}>
+                <span className={styles.suggName}>{s.name}</span>
+                {s.subText && <span className={styles.suggSubText}>{s.subText}</span>}
+              </div>
             </li>
           ))}
         </ul>

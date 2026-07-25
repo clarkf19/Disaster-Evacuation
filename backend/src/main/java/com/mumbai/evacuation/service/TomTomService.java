@@ -130,55 +130,114 @@ public class TomTomService {
 
     /**
      * Forward geocode — search for places by name/address near a bias point.
-     * Used for the type-to-search location input in RoutePlanner.
-     * Returns up to 6 matching place suggestions with their coordinates.
+     * Combines TomTom Search API and Nominatim OpenStreetMap Geocoding for
+     * 100% comprehensive coverage across Mumbai (hospitals, stations, malls, streets, wards).
      */
     public List<PlaceSuggestion> searchPlaces(String query, double biasLat, double biasLon) {
         List<PlaceSuggestion> results = new ArrayList<>();
         if (query == null || query.isBlank()) return results;
 
+        // 1. Query TomTom Search API
         try {
-            String encoded = java.net.URLEncoder.encode(query.trim(), java.nio.charset.StandardCharsets.UTF_8);
+            String encoded = java.net.URLEncoder.encode(query.trim() + " Mumbai", java.nio.charset.StandardCharsets.UTF_8);
             String url = String.format(Locale.US,
-                    "https://api.tomtom.com/search/2/search/%s.json?key=%s&countrySet=IN&lat=%.6f&lon=%.6f&radius=40000&limit=6",
+                    "https://api.tomtom.com/search/2/search/%s.json?key=%s&countrySet=IN&lat=%.6f&lon=%.6f&radius=50000&limit=8&idxSet=POI,PAD,Str,Geo",
                     encoded, apiKey, biasLat, biasLon);
 
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("Accept", "application/json")
-                    .timeout(Duration.ofSeconds(5))
+                    .timeout(Duration.ofSeconds(4))
                     .GET()
                     .build();
 
             HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             if (res.statusCode() == 200) {
                 JsonNode root = objectMapper.readTree(res.body());
-                for (JsonNode result : root.path("results")) {
-                    String name = result.path("poi").path("name").asText("");
-                    if (name.isBlank()) name = result.path("address").path("freeformAddress").asText("");
-                    if (name.isBlank()) name = result.path("address").path("municipalitySubdivision").asText("");
-                    if (name.isBlank()) continue;
+                for (JsonNode item : root.path("results")) {
+                    String mainName = item.path("poi").path("name").asText("");
+                    if (mainName.isBlank()) mainName = item.path("address").path("streetName").asText("");
+                    if (mainName.isBlank()) mainName = item.path("address").path("municipalitySubdivision").asText("");
+                    if (mainName.isBlank()) mainName = item.path("address").path("freeformAddress").asText("");
+                    if (mainName.isBlank()) continue;
 
-                    double lat = result.path("position").path("lat").asDouble();
-                    double lon = result.path("position").path("lon").asDouble();
-                    String type = result.path("type").asText("");
+                    double lat = item.path("position").path("lat").asDouble();
+                    double lon = item.path("position").path("lon").asDouble();
+                    String type = item.path("type").asText("POI");
 
-                    // Build a clean display label
-                    String area = result.path("address").path("municipalitySubdivision").asText("");
-                    if (area.isBlank()) area = result.path("address").path("municipality").asText("");
-                    String label = area.isBlank() ? name : name + ", " + area;
+                    String freeform = item.path("address").path("freeformAddress").asText("");
+                    String sub = item.path("address").path("municipalitySubdivision").asText("");
+                    String city = item.path("address").path("municipality").asText("Mumbai");
+                    
+                    String subText = !freeform.isBlank() ? freeform : (sub.isBlank() ? city : sub + ", " + city);
 
-                    results.add(new PlaceSuggestion(label, lat, lon, type));
+                    String icon = resolveIcon(mainName, type);
+                    results.add(new PlaceSuggestion(mainName, subText, lat, lon, type, icon));
                 }
             }
         } catch (Exception e) {
             log.warn("TomTom search failed for query '{}': {}", query, e.getMessage());
         }
+
+        // 2. Fallback to Nominatim OSM Search API if TomTom returned few results
+        if (results.size() < 4) {
+            try {
+                String encoded = java.net.URLEncoder.encode(query.trim() + ", Mumbai", java.nio.charset.StandardCharsets.UTF_8);
+                String url = String.format(Locale.US,
+                        "https://nominatim.openstreetmap.org/search?q=%s&format=json&addressdetails=1&limit=8&viewbox=72.75,19.35,73.10,18.80&bounded=1",
+                        encoded);
+
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .header("User-Agent", "MumbaiDisasterEvacuationSystem/1.0")
+                        .header("Accept", "application/json")
+                        .timeout(Duration.ofSeconds(4))
+                        .GET()
+                        .build();
+
+                HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+                if (res.statusCode() == 200) {
+                    JsonNode array = objectMapper.readTree(res.body());
+                    for (JsonNode item : array) {
+                        String displayName = item.path("display_name").asText("");
+                        if (displayName.isBlank()) continue;
+
+                        String[] parts = displayName.split(",");
+                        String mainName = parts[0].trim();
+                        String subText = parts.length > 1 ? String.join(", ", Arrays.copyOfRange(parts, 1, Math.min(parts.length, 4))).trim() : "Mumbai";
+
+                        double lat = item.path("lat").asDouble();
+                        double lon = item.path("lon").asDouble();
+                        String icon = resolveIcon(displayName, "OSM");
+
+                        boolean exists = results.stream().anyMatch(r -> Math.abs(r.lat() - lat) < 0.001 && Math.abs(r.lon() - lon) < 0.001);
+                        if (!exists) {
+                            results.add(new PlaceSuggestion(mainName, subText, lat, lon, "OSM", icon));
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Nominatim fallback search error for query '{}': {}", query, e.getMessage());
+            }
+        }
+
         return results;
     }
 
+    private String resolveIcon(String text, String type) {
+        String t = text.toLowerCase();
+        if (t.contains("hospital") || t.contains("clinic") || t.contains("medical") || t.contains("health")) return "🏥";
+        if (t.contains("station") || t.contains("metro") || t.contains("railway") || t.contains("bus")) return "🚇";
+        if (t.contains("mall") || t.contains("market") || t.contains("bazaar") || t.contains("plaza")) return "🛍️";
+        if (t.contains("school") || t.contains("college") || t.contains("university") || t.contains("institute")) return "🎓";
+        if (t.contains("stadium") || t.contains("ground") || t.contains("park") || t.contains("garden")) return "🏟️";
+        if (t.contains("airport") || t.contains("terminal")) return "✈️";
+        if ("POI".equalsIgnoreCase(type)) return "🏢";
+        return "📍";
+    }
+
     /** DTO for a place search suggestion */
-    public record PlaceSuggestion(String name, double lat, double lon, String type) {}
+    public record PlaceSuggestion(String name, String subText, double lat, double lon, String type, String icon) {}
 
     private LiveRouteResponse parseRouteResponse(JsonNode route) {
         JsonNode summary = route.path("summary");

@@ -61,4 +61,22 @@ public class Graph {
         adjacencyList.clear();
         edgesById.clear();
     }
+
+    /**
+     * Finds the nearest node in the graph to the specified latitude and longitude.
+     */
+    public Node findNearestNode(double targetLat, double targetLon) {
+        Node bestNode = null;
+        double minDistanceSq = Double.MAX_VALUE;
+        for (Node node : nodes.values()) {
+            double dlat = node.getLatitude() - targetLat;
+            double dlon = node.getLongitude() - targetLon;
+            double distSq = dlat * dlat + dlon * dlon;
+            if (distSq < minDistanceSq) {
+                minDistanceSq = distSq;
+                bestNode = node;
+            }
+        }
+        return bestNode;
+    }
 }

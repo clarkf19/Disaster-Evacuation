@@ -20,3 +20,10 @@ tomtom:
     key: DBrnjTcwBdWE0vXY5hdLZ749gHSPPP6q
     routing-base-url: https://api.tomtom.com/routing/1/calculateRoute
     geocode-base-url: https://api.tomtom.com/search/2/reverseGeocode
+
+# Emergency AI Assistant LLM configuration
+llm:
+  provider: ${LLM_PROVIDER:gemini}
+  api-key: ${GEMINI_API_KEY:}
+  gemini-model: gemini-1.5-flash
+

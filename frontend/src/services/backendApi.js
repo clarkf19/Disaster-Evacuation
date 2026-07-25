@@ -37,3 +37,11 @@ export const runEvacuationSim      = (strategy = 'CAPACITY_AWARE') =>
 export const getActiveEvacueeGroups = () => json(`${BASE}/evacuation/groups`);
 export const compareStrategies      = (name) =>
   json(`${BASE}/evacuation/compare?scenarioName=${encodeURIComponent(name)}`, { method: 'POST' });
+
+// --- Emergency Chatbot ---
+export const sendChatMessage = (message, userLat = null, userLon = null) =>
+  json(`${BASE}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, userLat, userLon }),
+  });
