@@ -3,7 +3,8 @@ import { calcLiveRoute, reverseGeocode, searchPlaces } from '../services/tomtomA
 import LiveAdvisoryCard from './LiveAdvisoryCard';
 import styles from './RoutePlanner.module.css';
 
-const MUMBAI_CENTER = { lat: 19.076, lon: 72.8777 };
+const MUMBAI_CENTER = { lat: 19.18, lon: 72.93 }; // MMR geographic centre (covers Virar → Colaba)
+
 
 export default function RoutePlanner({
   clickMode,
@@ -314,7 +315,7 @@ function LocationSearch({
           <input
             className={styles.locationInput}
             type="text"
-            placeholder="Type any location in Mumbai or click map..."
+            placeholder="Type any location (Virar, Colaba, Thane, Navi Mumbai...)"
             value={query}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}

@@ -167,10 +167,11 @@ export default function MapView({
 }) {
   return (
     <MapContainer
-      center={[19.0760, 72.8777]}
-      zoom={11}
+      center={[19.18, 72.93]}
+      zoom={10}
       style={{ width: '100%', height: '100%' }}
       zoomControl={true}
+      minZoom={9}
     >
       {/* CartoDB Voyager — clean, light, Google Maps feel */}
       <TileLayer

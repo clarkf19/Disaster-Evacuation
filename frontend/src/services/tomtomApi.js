@@ -87,12 +87,14 @@ export async function reverseGeocode(lat, lon) {
 export async function searchPlaces(query) {
   if (!query || query.trim().length < 2) return [];
 
-  // Mumbai centre — Photon biases results toward this point
-  const MUMBAI_LAT = 19.0760;
-  const MUMBAI_LON = 72.8777;
+  // MMR geographic centre — Photon biases results toward this point
+  // Placed at Andheri/JVLR crossover so both North (Virar) and South (Colaba) results rank well
+  const MUMBAI_LAT = 19.18;
+  const MUMBAI_LON = 72.93;
 
-  // Mumbai bounding box: west, south, east, north
-  const bbox = '72.55,18.70,73.20,19.40';
+  // Full Mumbai Metropolitan Region bounding box: west, south, east, north
+  // Covers: Colaba (south) → Virar/Vasai (north), Bandra (west) → Navi Mumbai/Panvel (east)
+  const bbox = '72.70,18.84,73.10,19.52';
 
   const url = `/photon/api/?q=${encodeURIComponent(query.trim())}&lat=${MUMBAI_LAT}&lon=${MUMBAI_LON}&limit=15&lang=en&bbox=${bbox}`;
 
