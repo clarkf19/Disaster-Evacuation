@@ -1,8 +1,49 @@
+.panelContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modeToggleBar {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  background: var(--panel-border, #e2e8f0);
+  border-radius: 10px;
+}
+
+.modeBtn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 7px 8px;
+  border-radius: 7px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.modeBtn:hover {
+  color: #1e293b;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.activeModeBtn {
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
 .panel {
   display: flex;
   flex-direction: column;
   gap: 0;
 }
+
 
 .section {
   padding: 16px;

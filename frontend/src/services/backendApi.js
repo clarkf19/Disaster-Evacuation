@@ -45,3 +45,15 @@ export const sendChatMessage = (message, userLat = null, userLon = null) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, userLat, userLon }),
   });
+
+// --- Disaster Protection & Emergency Hospitals ---
+export const getDisasterProtectionGuides = () => json(`${BASE}/disaster-info/guides`);
+export const getProtectionGuideByType    = (type) => json(`${BASE}/disaster-info/guides/${type}`);
+export const getEmergencyHospitals       = (disasterType = '', region = '') => {
+  const params = new URLSearchParams();
+  if (disasterType) params.append('disasterType', disasterType);
+  if (region) params.append('region', region);
+  const q = params.toString();
+  return json(`${BASE}/disaster-info/hospitals${q ? `?${q}` : ''}`);
+};
+
