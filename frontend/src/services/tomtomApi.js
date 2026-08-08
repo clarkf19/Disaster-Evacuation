@@ -41,11 +41,13 @@ export async function calcLiveRoute(fromLat, fromLon, toLat, toLon) {
  */
 export async function reverseGeocode(lat, lon) {
   try {
-    const url = `/nominatim/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1&zoom=17`;
-    const res = await fetch(url, {
-      headers: { 'Accept': 'application/json' },
-    });
-    if (!res.ok) return coordinateLabel(lat, lon);
+    let url = `/nominatim/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1&zoom=17`;
+    let res = await fetch(url, { headers: { 'Accept': 'application/json' } }).catch(() => null);
+    if (!res || !res.ok) {
+      url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1&zoom=17`;
+      res = await fetch(url, { headers: { 'Accept': 'application/json' } }).catch(() => null);
+    }
+    if (!res || !res.ok) return coordinateLabel(lat, lon);
     const data = await res.json();
     const addr = data.address || {};
 
@@ -96,11 +98,15 @@ export async function searchPlaces(query) {
   // Covers: Colaba (south) → Virar/Vasai (north), Bandra (west) → Navi Mumbai/Panvel (east)
   const bbox = '72.70,18.84,73.10,19.52';
 
-  const url = `/photon/api/?q=${encodeURIComponent(query.trim())}&lat=${MUMBAI_LAT}&lon=${MUMBAI_LON}&limit=15&lang=en&bbox=${bbox}`;
+  let url = `/photon/api/?q=${encodeURIComponent(query.trim())}&lat=${MUMBAI_LAT}&lon=${MUMBAI_LON}&limit=15&lang=en&bbox=${bbox}`;
 
   try {
-    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    if (!res.ok) return [];
+    let res = await fetch(url, { headers: { 'Accept': 'application/json' } }).catch(() => null);
+    if (!res || !res.ok) {
+      url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query.trim())}&lat=${MUMBAI_LAT}&lon=${MUMBAI_LON}&limit=15&lang=en&bbox=${bbox}`;
+      res = await fetch(url, { headers: { 'Accept': 'application/json' } }).catch(() => null);
+    }
+    if (!res || !res.ok) return [];
 
     const geojson = await res.json();
     const features = geojson.features || [];

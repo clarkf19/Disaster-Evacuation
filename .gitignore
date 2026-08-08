@@ -19,6 +19,8 @@ secrets/
 data/*.csv
 !data/mumbai_nodes.csv
 !data/mumbai_edges.csv
+!backend/data/mumbai_nodes.csv
+!backend/data/mumbai_edges.csv
 data/*.json
 data/*.pkl
 data/*.parquet

@@ -9,8 +9,8 @@ import org.springframework.web.bind.annotation.*;
 /**
  * LiveRouteController — secure backend proxy for TomTom live traffic routing.
  *
- * Supports both POST (JSON body) and GET (query params) so requests never fail
- * with 400 Bad Request or 500 Internal Server Error.
+ * POST /api/live-route accepts a JSON body from the frontend.
+ * GET  /api/live-route accepts query params (for browser/tool testing).
  */
 @RestController
 @RequestMapping("/api")
@@ -25,30 +25,25 @@ public class LiveRouteController {
 
     /**
      * POST /api/live-route
-     * Body: { fromLat, fromLon, toLat, toLon }
+     * Body: { "fromLat": 19.07, "fromLon": 72.87, "toLat": 19.02, "toLon": 72.84 }
      */
     @PostMapping("/live-route")
     public ResponseEntity<LiveRouteResponse> calculateLiveRoutePost(
-            @RequestBody(required = false) LiveRouteRequest request,
-            @RequestParam(required = false) Double fromLat,
-            @RequestParam(required = false) Double fromLon,
-            @RequestParam(required = false) Double toLat,
-            @RequestParam(required = false) Double toLon) {
-
-        LiveRouteRequest req = resolveRequest(request, fromLat, fromLon, toLat, toLon);
-        LiveRouteResponse response = tomTomService.calculateLiveRoute(req);
+            @RequestBody LiveRouteRequest request) {
+        LiveRouteResponse response = tomTomService.calculateLiveRoute(request);
         return ResponseEntity.ok(response);
     }
 
     /**
      * GET /api/live-route?fromLat=...&fromLon=...&toLat=...&toLon=...
+     * Useful for browser testing and health-checks.
      */
     @GetMapping("/live-route")
     public ResponseEntity<LiveRouteResponse> calculateLiveRouteGet(
-            @RequestParam(required = false, defaultValue = "19.0760") double fromLat,
-            @RequestParam(required = false, defaultValue = "72.8777") double fromLon,
-            @RequestParam(required = false, defaultValue = "19.0176") double toLat,
-            @RequestParam(required = false, defaultValue = "72.8461") double toLon) {
+            @RequestParam(defaultValue = "19.0760") double fromLat,
+            @RequestParam(defaultValue = "72.8777") double fromLon,
+            @RequestParam(defaultValue = "19.0176") double toLat,
+            @RequestParam(defaultValue = "72.8461") double toLon) {
 
         LiveRouteRequest req = new LiveRouteRequest();
         req.setFromLat(fromLat);
@@ -66,35 +61,22 @@ public class LiveRouteController {
      */
     @GetMapping("/geocode")
     public ResponseEntity<?> reverseGeocode(
-            @RequestParam(required = false, defaultValue = "19.0760") double lat,
-            @RequestParam(required = false, defaultValue = "72.8777") double lon) {
+            @RequestParam(defaultValue = "19.0760") double lat,
+            @RequestParam(defaultValue = "72.8777") double lon) {
         String name = tomTomService.reverseGeocode(lat, lon);
         return ResponseEntity.ok(java.util.Map.of("name", name, "lat", lat, "lon", lon));
     }
 
     /**
      * GET /api/search?q={query}&lat={biasLat}&lon={biasLon}
-     * Forward geocode — returns up to 6 place suggestions for the typed query.
-     * Used for type-to-search autocomplete in the route planner.
+     * Forward geocode — returns place suggestions for autocomplete.
      */
     @GetMapping("/search")
     public ResponseEntity<?> searchPlaces(
             @RequestParam String q,
-            @RequestParam(required = false, defaultValue = "19.0760") double lat,
-            @RequestParam(required = false, defaultValue = "72.8777") double lon) {
+            @RequestParam(defaultValue = "19.18") double lat,
+            @RequestParam(defaultValue = "72.93") double lon) {
         var suggestions = tomTomService.searchPlaces(q, lat, lon);
         return ResponseEntity.ok(suggestions);
-    }
-
-    private LiveRouteRequest resolveRequest(LiveRouteRequest bodyReq, Double fromLat, Double fromLon, Double toLat, Double toLon) {
-        if (bodyReq != null && (bodyReq.getFromLat() != 0.0 || bodyReq.getToLat() != 0.0)) {
-            return bodyReq;
-        }
-        LiveRouteRequest req = new LiveRouteRequest();
-        req.setFromLat(fromLat != null ? fromLat : 19.0760);
-        req.setFromLon(fromLon != null ? fromLon : 72.8777);
-        req.setToLat(toLat != null ? toLat : 19.0176);
-        req.setToLon(toLon != null ? toLon : 72.8461);
-        return req;
     }
 }

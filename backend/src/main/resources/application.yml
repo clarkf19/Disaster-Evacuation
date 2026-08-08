@@ -8,7 +8,7 @@ spring:
       - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
 
 server:
-  port: 8080
+  port: ${PORT:8080}
 
 logging:
   level:
@@ -17,7 +17,7 @@ logging:
 # TomTom Routing API — key stored securely on backend only, never exposed to frontend
 tomtom:
   api:
-    key: DBrnjTcwBdWE0vXY5hdLZ749gHSPPP6q
+    key: ${TOMTOM_API_KEY:}
     routing-base-url: https://api.tomtom.com/routing/1/calculateRoute
     geocode-base-url: https://api.tomtom.com/search/2/reverseGeocode
 

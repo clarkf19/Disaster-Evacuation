@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mumbai.evacuation.dto.LiveRouteRequest;
 import com.mumbai.evacuation.dto.LiveRouteResponse;
+import com.mumbai.evacuation.dto.PlaceSuggestion;
 import com.mumbai.evacuation.dto.RouteRequest;
 import com.mumbai.evacuation.dto.RouteResponse;
 import com.mumbai.evacuation.model.Node;
@@ -141,9 +142,10 @@ public class TomTomService {
 
         // 1. Query TomTom Search API
         try {
-            String encoded = java.net.URLEncoder.encode(query.trim() + " Mumbai", java.nio.charset.StandardCharsets.UTF_8);
+            String encoded = java.net.URLEncoder.encode(query.trim(), java.nio.charset.StandardCharsets.UTF_8);
+            // radius=80000 covers full MMR: Colaba (south) to Virar (north) ~ 75km
             String url = String.format(Locale.US,
-                    "https://api.tomtom.com/search/2/search/%s.json?key=%s&countrySet=IN&lat=%.6f&lon=%.6f&radius=50000&limit=8&idxSet=POI,PAD,Str,Geo",
+                    "https://api.tomtom.com/search/2/search/%s.json?key=%s&countrySet=IN&lat=%.6f&lon=%.6f&radius=80000&limit=10&idxSet=POI,PAD,Str,Geo",
                     encoded, apiKey, biasLat, biasLon);
 
             HttpRequest req = HttpRequest.newBuilder()
@@ -184,9 +186,11 @@ public class TomTomService {
         // 2. Fallback to Nominatim OSM Search API if TomTom returned few results
         if (results.size() < 4) {
             try {
-                String encoded = java.net.URLEncoder.encode(query.trim() + ", Mumbai", java.nio.charset.StandardCharsets.UTF_8);
+                String encoded = java.net.URLEncoder.encode(query.trim() + ", Mumbai Metropolitan Region", java.nio.charset.StandardCharsets.UTF_8);
+                // viewbox covers full MMR: Virar/Vasai(N) to Colaba(S), Bandra(W) to Navi Mumbai/Panvel(E)
+                // bounded=0 so results slightly outside viewbox still appear
                 String url = String.format(Locale.US,
-                        "https://nominatim.openstreetmap.org/search?q=%s&format=json&addressdetails=1&limit=8&viewbox=72.75,19.35,73.10,18.80&bounded=1",
+                        "https://nominatim.openstreetmap.org/search?q=%s&format=json&addressdetails=1&limit=8&viewbox=72.70,19.52,73.10,18.84&bounded=0",
                         encoded);
 
                 HttpRequest req = HttpRequest.newBuilder()
@@ -237,9 +241,6 @@ public class TomTomService {
         if ("POI".equalsIgnoreCase(type)) return "🏢";
         return "📍";
     }
-
-    /** DTO for a place search suggestion */
-    public record PlaceSuggestion(String name, String subText, double lat, double lon, String type, String icon) {}
 
     private LiveRouteResponse parseRouteResponse(JsonNode route) {
         JsonNode summary = route.path("summary");
