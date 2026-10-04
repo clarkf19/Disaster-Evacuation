@@ -101,9 +101,14 @@
   transition: transform 0.15s, box-shadow 0.15s;
 }
 
-.btnDanger:hover {
+.btnDanger:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(234,67,53,0.35);
+}
+
+.btnDanger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .row {

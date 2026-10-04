@@ -103,8 +103,34 @@
   text-align: center;
 }
 
-.navBtn:hover {
+.navBtn:hover:not(:disabled) {
   background: #166534;
   color: white;
   border-color: #166534;
+}
+
+.navBtn:disabled {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.cardUnsafe {
+  background: #f8fafc;
+  opacity: 0.85;
+}
+
+.note {
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+.unverified {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 8px;
+  padding: 6px 10px;
 }

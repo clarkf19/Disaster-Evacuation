@@ -15,8 +15,8 @@ Design Decisions & Trade-Off Rationale:
    - Secondary: 40 km/h, Capacity 200 veh/hr
    - Tertiary:  30 km/h, Capacity 100 veh/hr
 3. Output Formats:
-   - Exported directly to CSV files ('data/mumbai_nodes.csv' and 'data/mumbai_edges.csv') for easy ingestion
-     into PostgreSQL database tables and direct loading by Java graph engine.
+   - Exported to backend/src/main/resources/data/mumbai_{nodes,edges}.csv, which the backend loads from its classpath.
+     Usage: python scripts/extract_mumbai_graph.py [--bbox W S E N] [--residential] [--synthetic]
 """
 
 import os
@@ -28,7 +28,7 @@ import networkx as nx
 # Configure OSMnx settings & use reliable Overpass mirror if default rate-limits
 ox.settings.use_cache = True
 ox.settings.log_console = True
-ox.settings.timeout = 5
+ox.settings.timeout = 180  # Overpass queries for a whole city routinely take > 1 minute
 ox.settings.overpass_url = "https://overpass.kumi.systems/api/interpreter"
 
 # Define Road Attributes Mapping
@@ -190,16 +190,18 @@ def generate_fallback_mumbai_graph():
     return df_nodes, df_edges
 
 
-def extract_and_process_mumbai_graph():
+def extract_and_process_mumbai_graph(bbox, allow_synthetic, include_residential):
     print("Starting OpenStreetMap Mumbai road network processing...")
-    
-    # Custom filter for major road types
-    cf = '["highway"~"motorway|trunk|primary|secondary|tertiary"]'
-    
+
+    # Major roads by default; --residential adds residential/unclassified streets so that
+    # origins snap to a nearby road (much larger graph — check routing performance after).
+    road_classes = "motorway|trunk|primary|secondary|tertiary"
+    if include_residential:
+        road_classes += "|residential|unclassified|living_street"
+    cf = f'["highway"~"{road_classes}"]'
+
     try:
-        print("Querying OSMnx for Greater Mumbai road network...")
-        bbox = (72.75, 18.88, 73.00, 19.32)
-        # Attempt quick OSMnx fetch with strict timeout
+        print(f"Querying OSMnx for road network in bbox (west, south, east, north) = {bbox} ...")
         G = ox.graph_from_bbox(bbox=bbox, network_type="drive", custom_filter=cf)
         print(f"Raw OSMnx graph loaded: {len(G.nodes)} nodes, {len(G.edges)} edges.")
 
@@ -234,10 +236,14 @@ def extract_and_process_mumbai_graph():
             edge_counter += 1
         df_edges = pd.DataFrame(edges_data)
     except Exception as e:
-        print(f"OSMnx Overpass network query skipped/failed ({e}). Executing fast realistic Mumbai graph generator...")
+        if not allow_synthetic:
+            # Never silently replace real OSM data with a made-up graph.
+            sys.exit(f"OSMnx query failed ({e}). Re-run later, or pass --synthetic to generate a small FAKE demo graph.")
+        print(f"OSMnx query failed ({e}). --synthetic given: generating a small SYNTHETIC demo graph (not real roads).")
         df_nodes, df_edges = generate_fallback_mumbai_graph()
 
-    output_dir = os.path.join(os.path.dirname(__file__), "..", "data")
+    # The backend loads the graph from its classpath.
+    output_dir = os.path.join(os.path.dirname(__file__), "..", "backend", "src", "main", "resources", "data")
     os.makedirs(output_dir, exist_ok=True)
     
     nodes_csv_path = os.path.join(output_dir, "mumbai_nodes.csv")
@@ -251,6 +257,16 @@ def extract_and_process_mumbai_graph():
     print(f"Edges saved to: {edges_csv_path} (Total: {len(df_edges)})")
 
 if __name__ == "__main__":
-    extract_and_process_mumbai_graph()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Extract the Mumbai road graph from OpenStreetMap.")
+    parser.add_argument("--bbox", type=float, nargs=4, metavar=("WEST", "SOUTH", "EAST", "NORTH"),
+                        default=[72.75, 18.88, 73.00, 19.32],
+                        help="Bounding box. Default covers Colaba to Thane; e.g. 72.75 18.88 73.15 19.50 adds Navi Mumbai and Mira-Bhayandar.")
+    parser.add_argument("--residential", action="store_true", help="Include residential streets.")
+    parser.add_argument("--synthetic", action="store_true",
+                        help="If the OSM download fails, write a small synthetic demo graph instead of exiting.")
+    args = parser.parse_args()
+    extract_and_process_mumbai_graph(tuple(args.bbox), args.synthetic, args.residential)
 
 

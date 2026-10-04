@@ -96,3 +96,36 @@ html, body, #root {
   background: none;
   border: none;
 }
+
+.disaster-marker-shake {
+  font-size: 22px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+  animation: disaster-shake 0.5s infinite alternate;
+}
+
+@keyframes disaster-shake {
+  from { transform: rotate(-5deg); }
+  to   { transform: rotate(5deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .disaster-marker-shake { animation: none; }
+}
+
+.popup-action {
+  margin-top: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  background: #166534;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--google-blue);
+  outline-offset: 2px;
+}

@@ -1,10 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { calcLiveRoute, reverseGeocode, searchPlaces } from '../services/tomtomApi';
+import { reverseGeocode, searchPlaces } from '../services/routingApi';
 import LiveAdvisoryCard from './LiveAdvisoryCard';
 import styles from './RoutePlanner.module.css';
 
-const MUMBAI_CENTER = { lat: 19.18, lon: 72.93 }; // MMR geographic centre (covers Virar → Colaba)
-
+/** Straight-line distance in km (for sorting shelters by proximity). */
+function distanceKm(a, b) {
+  const R = 6371;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLon = (b.lon - a.lon) * Math.PI / 180;
+  const h = Math.sin(dLat / 2) ** 2
+    + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
 
 export default function RoutePlanner({
   clickMode,
@@ -12,43 +19,25 @@ export default function RoutePlanner({
   source,
   dest,
   onClear,
-  onRouteResult,
+  onCompute,
+  loading,
+  error,
   onSourceSet,
   onDestSet,
-  hasDisaster,
   routeResult,
   shelters = [],
 }) {
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState('');
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [shelterMode, setShelterMode] = useState(false); // show shelter picker for destination
+  const [gpsError, setGpsError] = useState('');
+  const [shelterMode, setShelterMode] = useState(false);
 
-  async function handleCompute() {
-    if (!source || !dest) {
-      setError('Please set both a start and destination location.');
-      return;
-    }
-    setError('');
-    setLoading(true);
-    try {
-      const result = await calcLiveRoute(source.lat, source.lon, dest.lat, dest.lon);
-      onRouteResult(result);
-    } catch (e) {
-      setError(e.message || 'Failed to calculate route. Ensure the backend server is running.');
-      onRouteResult(null);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleGpsLocation() {
+  function handleGpsLocation() {
     if (!navigator.geolocation) {
-      setError('GPS not available in your browser.');
+      setGpsError('GPS not available in your browser.');
       return;
     }
     setGpsLoading(true);
-    setError('');
+    setGpsError('');
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords;
@@ -57,7 +46,7 @@ export default function RoutePlanner({
         setGpsLoading(false);
       },
       () => {
-        setError('Could not access your location. Please allow location access or set it manually.');
+        setGpsError('Could not access your location. Allow location access or set it manually.');
         setGpsLoading(false);
       },
       { enableHighAccuracy: true, timeout: 8000 }
@@ -70,14 +59,15 @@ export default function RoutePlanner({
     setShelterMode(false);
   }
 
+  const shownError = error || gpsError;
+
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
-        <h2>Live Route Planner</h2>
-        <p className={styles.sub}>Set locations by typing, using GPS, or clicking the map.</p>
+        <h2>Evacuation Route Planner</h2>
+        <p className={styles.sub}>Set locations by typing, using GPS, or clicking the map. Routes always avoid active hazard zones.</p>
       </div>
 
-      {/* ── Source ── */}
       <LocationSearch
         label="Start Location"
         icon="🔵"
@@ -87,21 +77,19 @@ export default function RoutePlanner({
         clickModeKey="source"
         clickMode={clickMode}
         setClickMode={setClickMode}
-        biasLat={source?.lat || MUMBAI_CENTER.lat}
-        biasLon={source?.lon || MUMBAI_CENTER.lon}
         gpsSlot={
           <button
             className={styles.gpsBtn}
             onClick={handleGpsLocation}
             disabled={gpsLoading}
             title="Use my live GPS location"
+            aria-label="Use my current location"
           >
             {gpsLoading ? <span className={styles.spinner} /> : '📡'}
           </button>
         }
       />
 
-      {/* ── Destination ── */}
       <LocationSearch
         label="Destination"
         icon="🔴"
@@ -111,45 +99,32 @@ export default function RoutePlanner({
         clickModeKey="dest"
         clickMode={clickMode}
         setClickMode={setClickMode}
-        biasLat={source?.lat || MUMBAI_CENTER.lat}
-        biasLon={source?.lon || MUMBAI_CENTER.lon}
       />
 
-      {/* ── Evacuate to Shelter button ── */}
       <button
         className={`${styles.shelterToggleBtn} ${shelterMode ? styles.shelterToggleActive : ''}`}
         onClick={() => setShelterMode(v => !v)}
       >
         <span>⛺</span>
-        {shelterMode ? 'Hide Shelter List' : 'Evacuate → Choose Nearest Shelter'}
-        <span className={styles.shelterCount}>{shelters.length}</span>
+        {shelterMode ? 'Hide Shelter List' : 'Evacuate → Choose a Shelter'}
+        <span className={styles.shelterCount}>{shelters.filter(s => !s.unsafe).length}</span>
       </button>
 
-      {/* ── Shelter picker list ── */}
       {shelterMode && (
-        <ShelterPicker shelters={shelters} onSelect={handleShelterPick} selectedDest={dest} />
+        <ShelterPicker shelters={shelters} origin={source} onSelect={handleShelterPick} selectedDest={dest} />
       )}
 
-      {/* Map-click tip */}
       {(clickMode === 'source' || clickMode === 'dest') && (
         <div className={styles.tip}>
           <span>📍</span> Click anywhere on the map to pin your {clickMode === 'source' ? 'start' : 'destination'}
         </div>
       )}
 
-      {error && <p className={styles.error}>{error}</p>}
+      {shownError && <p className={styles.error} role="alert">{shownError}</p>}
 
       <div className={styles.buttons}>
-        <button
-          className={styles.btnPrimary}
-          onClick={handleCompute}
-          disabled={loading || !source || !dest}
-        >
-          {loading ? (
-            <><span className={styles.spinner} /> Calculating Live Route...</>
-          ) : (
-            '⚡ Calculate Live Route'
-          )}
+        <button className={styles.btnPrimary} onClick={onCompute} disabled={loading || !source || !dest}>
+          {loading ? <><span className={styles.spinner} /> Calculating route...</> : '⚡ Calculate Safe Route'}
         </button>
 
         {(source || dest || routeResult) && (
@@ -159,26 +134,26 @@ export default function RoutePlanner({
         )}
       </div>
 
-      {routeResult && !loading && (
-        <LiveAdvisoryCard result={routeResult} hasDisaster={hasDisaster} />
-      )}
+      {routeResult && !loading && <LiveAdvisoryCard result={routeResult} />}
     </div>
   );
 }
 
 /* ─────────────────────────────────────────────────────────
-   ShelterPicker — sorted list of shelters the user can
-   select to auto-fill as destination
+   ShelterPicker — shelters sorted by distance from the start
+   point (or by free space when no start is set). Unsafe
+   shelters are shown but cannot be selected.
 ───────────────────────────────────────────────────────── */
-function ShelterPicker({ shelters, onSelect, selectedDest }) {
+function ShelterPicker({ shelters, origin, onSelect, selectedDest }) {
   const [query, setQuery] = useState('');
 
   const sorted = [...shelters]
     .map(s => ({
       ...s,
       pct: Math.min(100, Math.round((s.currentOccupancy / s.totalCapacity) * 100)),
+      km: origin ? distanceKm(origin, s) : null,
     }))
-    .sort((a, b) => a.pct - b.pct); // least full first
+    .sort((a, b) => (a.unsafe - b.unsafe) || (origin ? a.km - b.km : a.pct - b.pct));
 
   const filtered = query.trim()
     ? sorted.filter(s => s.name.toLowerCase().includes(query.toLowerCase()))
@@ -187,7 +162,7 @@ function ShelterPicker({ shelters, onSelect, selectedDest }) {
   return (
     <div className={styles.shelterPicker}>
       <div className={styles.shelterPickerHeader}>
-        <span>⛺ Select an evacuation shelter as destination</span>
+        <span>⛺ {origin ? 'Nearest shelters first' : 'Least-full shelters first'}</span>
       </div>
       <input
         className={styles.shelterSearch}
@@ -195,31 +170,39 @@ function ShelterPicker({ shelters, onSelect, selectedDest }) {
         placeholder="Filter shelters..."
         value={query}
         onChange={e => setQuery(e.target.value)}
+        aria-label="Filter shelters"
       />
       <div className={styles.shelterPickerList}>
         {filtered.map(s => {
-          const barColor = s.pct >= 90 ? '#ea4335' : s.pct >= 70 ? '#f97316' : '#34a853';
+          const barColor = s.unsafe ? '#94a3b8' : s.pct >= 90 ? '#ea4335' : s.pct >= 70 ? '#f97316' : '#34a853';
           const isSelected = selectedDest?.name?.startsWith(s.name);
+          const disabled = s.unsafe || s.isFull;
           return (
-            <div
-              key={s.id || s.name}
+            <button
+              type="button"
+              key={s.id}
               className={`${styles.shelterItem} ${isSelected ? styles.shelterItemSelected : ''}`}
-              onClick={() => onSelect(s)}
+              onClick={() => !disabled && onSelect(s)}
+              disabled={disabled}
+              style={disabled ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
             >
               <div className={styles.shelterItemTop}>
                 <span className={styles.shelterItemName}>{s.name}</span>
                 <span className={styles.shelterItemBadge} style={{ color: barColor, background: `${barColor}18` }}>
-                  {s.pct}%
+                  {s.unsafe ? '⚠️ Unsafe' : `${s.pct}%`}
                 </span>
               </div>
               <div className={styles.shelterItemBar}>
                 <div style={{ width: `${s.pct}%`, backgroundColor: barColor, height: '100%', borderRadius: 4 }} />
               </div>
               <div className={styles.shelterItemMeta}>
-                <span>{s.remainingCapacity?.toLocaleString()} spots available</span>
+                <span>
+                  {s.unsafe ? 'Inside an active hazard zone' : `${s.remainingCapacity?.toLocaleString()} spots available`}
+                  {s.km != null && ` · ${s.km.toFixed(1)} km`}
+                </span>
                 {isSelected && <span className={styles.shelterItemCheck}>✓ Selected</span>}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -228,14 +211,13 @@ function ShelterPicker({ shelters, onSelect, selectedDest }) {
 }
 
 /* ─────────────────────────────────────────────────────────
-   LocationSearch — smart input: type → autocomplete,
-   pin button → map click, GPS button (source only)
+   LocationSearch — type → autocomplete, pin button → map
+   click, GPS button (source only)
 ───────────────────────────────────────────────────────── */
 function LocationSearch({
   label, icon, color,
   value, onSelect,
   clickModeKey, clickMode, setClickMode,
-  biasLat, biasLon,
   gpsSlot,
 }) {
   const [query, setQuery]             = useState('');
@@ -244,6 +226,7 @@ function LocationSearch({
   const [searching, setSearching]     = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const debounceRef = useRef(null);
+  const latestQuery = useRef('');
   const wrapRef     = useRef(null);
 
   useEffect(() => {
@@ -254,8 +237,10 @@ function LocationSearch({
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
+  useEffect(() => () => clearTimeout(debounceRef.current), []);
+
   useEffect(() => {
-    if (value?.name) setQuery(value.name);
+    setQuery(value?.name || '');
   }, [value?.name]);
 
   const handleInputChange = useCallback((e) => {
@@ -264,15 +249,17 @@ function LocationSearch({
     setOpen(true);
     setSelectedIndex(-1);
     clearTimeout(debounceRef.current);
-    if (val.trim().length < 2) { setSuggestions([]); return; }
+    latestQuery.current = val;
+    if (val.trim().length < 2) { setSuggestions([]); setSearching(false); return; }
     setSearching(true);
     debounceRef.current = setTimeout(async () => {
       const results = await searchPlaces(val);
+      // Ignore responses for queries the user has already typed past.
+      if (latestQuery.current !== val) return;
       setSuggestions(results);
       setSearching(false);
-    }, 280);
+    }, 300);
   }, []);
-
 
   function handleSuggestionClick(s) {
     onSelect({ lat: s.lat, lon: s.lon, name: s.name });
@@ -303,31 +290,37 @@ function LocationSearch({
   }
 
   const isMapActive = clickMode === clickModeKey;
+  const inputId = `loc-${clickModeKey}`;
 
   return (
     <div className={styles.locationGroup} ref={wrapRef}>
-      <label className={styles.locationLabel}>
-        <span className={styles.locationIcon}>{icon}</span>
+      <label className={styles.locationLabel} htmlFor={inputId}>
+        <span className={styles.locationIcon} aria-hidden="true">{icon}</span>
         {label}
       </label>
       <div className={styles.inputRow}>
         <div className={styles.inputWrap} style={isMapActive ? { outline: `2px solid ${color}` } : {}}>
           <input
+            id={inputId}
             className={styles.locationInput}
             type="text"
-            placeholder="Type any location (Virar, Colaba, Thane, Navi Mumbai...)"
+            placeholder="Search a place in Greater Mumbai or Thane…"
             value={query}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onFocus={() => { if (suggestions.length > 0) setOpen(true); }}
             autoComplete="off"
+            role="combobox"
+            aria-expanded={open && suggestions.length > 0}
+            aria-controls={`${inputId}-list`}
           />
           {searching && <span className={styles.spinnerInline} />}
         </div>
         <button
           className={`${styles.mapPinBtn} ${isMapActive ? styles.mapPinActive : ''}`}
           onClick={handleMapPin}
-          title="Click to pin on map"
+          title="Pick on map"
+          aria-label={`Pick ${label.toLowerCase()} on the map`}
           style={isMapActive ? { background: color, color: '#fff' } : {}}
         >
           📍
@@ -335,17 +328,21 @@ function LocationSearch({
         {gpsSlot}
       </div>
 
+      {open && query.trim().length >= 2 && !searching && suggestions.length === 0 && (
+        <p className={styles.noResults}>No places found in the mapped area.</p>
+      )}
+
       {open && suggestions.length > 0 && (
-        <ul className={styles.dropdown}>
+        <ul className={styles.dropdown} id={`${inputId}-list`} role="listbox">
           {suggestions.map((s, i) => (
             <li
-              key={i}
+              key={`${s.lat},${s.lon},${i}`}
+              role="option"
+              aria-selected={i === selectedIndex}
               className={`${styles.dropdownItem} ${i === selectedIndex ? styles.dropdownItemSelected : ''}`}
               onMouseDown={() => handleSuggestionClick(s)}
             >
-              <div className={styles.suggIconWrap}>
-                {s.icon || (s.type === 'POI' ? '🏢' : '📍')}
-              </div>
+              <div className={styles.suggIconWrap}>{s.icon || '📍'}</div>
               <div className={styles.suggTextWrap}>
                 <span className={styles.suggName}>{s.name}</span>
                 {s.subText && <span className={styles.suggSubText}>{s.subText}</span>}

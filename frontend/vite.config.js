@@ -6,27 +6,15 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Proxy backend API calls to avoid CORS issues in dev
+      // Same-origin /api in development, mirroring the Vercel rewrite in production.
+      // All third-party services (TomTom, Photon, Nominatim, Gemini) are called by the backend.
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
-      // Photon autocomplete API — built on OSM data, designed for rich place autocomplete
-      // Much better than Nominatim for autocomplete: returns POIs, roads, suburbs, stations etc.
-      '/photon': {
-        target: 'https://photon.komoot.io',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/photon/, ''),
-      },
-      // Nominatim — kept for reverse geocoding (precise locality names from coords)
-      '/nominatim': {
-        target: 'https://nominatim.openstreetmap.org',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/nominatim/, ''),
-        headers: {
-          'User-Agent': 'MumbaiDisasterEvacuationSystem/1.0',
-        },
-      },
-    }
-  }
+    },
+  },
+  test: {
+    environment: 'node',
+  },
 })
