@@ -20,6 +20,8 @@
 
     <properties>
         <java.version>17</java.version>
+        <!-- The evaluation report generator is opt-in: -Dsurefire.excludedGroups= -Dgroups=report -->
+        <surefire.excludedGroups>report</surefire.excludedGroups>
     </properties>
 
     <dependencies>
@@ -51,6 +53,13 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <excludedGroups>${surefire.excludedGroups}</excludedGroups>
+                </configuration>
             </plugin>
         </plugins>
     </build>

@@ -1,0 +1,125 @@
+{
+ "_note": "Approximate locations of chronic monsoon water-logging spots that are reported year after year. Not an official BMC list - verify against BMC's latest published flooding spots.",
+ "verified": false,
+ "hotspots": [
+  {
+   "name": "Hindmata Junction, Dadar East",
+   "lat": 19.0063,
+   "lon": 72.8421,
+   "elevationM": 6.1,
+   "radiusMeters": 350
+  },
+  {
+   "name": "Parel TT / Dr. Ambedkar Road",
+   "lat": 19.0035,
+   "lon": 72.843,
+   "elevationM": 14.1,
+   "radiusMeters": 350
+  },
+  {
+   "name": "Gandhi Market, King's Circle",
+   "lat": 19.03,
+   "lon": 72.8575,
+   "elevationM": 9.3,
+   "radiusMeters": 350
+  },
+  {
+   "name": "Sion Circle / Road No. 24",
+   "lat": 19.0405,
+   "lon": 72.8615,
+   "elevationM": 17.0,
+   "radiusMeters": 350
+  },
+  {
+   "name": "Dharavi T-Junction",
+   "lat": 19.0385,
+   "lon": 72.8535,
+   "elevationM": 10.4,
+   "radiusMeters": 350
+  },
+  {
+   "name": "Chunabhatti",
+   "lat": 19.0515,
+   "lon": 72.8695,
+   "elevationM": 5.5,
+   "radiusMeters": 350
+  },
+  {
+   "name": "Kurla (LBS Marg, Kamani)",
+   "lat": 19.079,
+   "lon": 72.885,
+   "elevationM": 8.3,
+   "radiusMeters": 350
+  },
+  {
+   "name": "Milan Subway, Santacruz",
+   "lat": 19.088,
+   "lon": 72.8435,
+   "elevationM": 6.7,
+   "radiusMeters": 350
+  },
+  {
+   "name": "Khar Subway",
+   "lat": 19.0712,
+   "lon": 72.8385,
+   "elevationM": 16.5,
+   "radiusMeters": 350
+  },
+  {
+   "name": "Andheri Subway",
+   "lat": 19.118,
+   "lon": 72.847,
+   "elevationM": 15.0,
+   "radiusMeters": 350
+  },
+  {
+   "name": "Saki Naka Junction",
+   "lat": 19.1035,
+   "lon": 72.888,
+   "elevationM": 19.1,
+   "radiusMeters": 350
+  },
+  {
+   "name": "Malad Subway",
+   "lat": 19.1868,
+   "lon": 72.8486,
+   "elevationM": 19.7,
+   "radiusMeters": 350
+  },
+  {
+   "name": "Dahisar Subway",
+   "lat": 19.2505,
+   "lon": 72.8595,
+   "elevationM": 10.9,
+   "radiusMeters": 350
+  },
+  {
+   "name": "Nair Hospital / Mumbai Central",
+   "lat": 18.97,
+   "lon": 72.8205,
+   "elevationM": 5.1,
+   "radiusMeters": 350
+  },
+  {
+   "name": "Wadala (Antop Hill)",
+   "lat": 19.0235,
+   "lon": 72.865,
+   "elevationM": 26.2,
+   "radiusMeters": 350
+  },
+  {
+   "name": "Postal Colony, Chembur",
+   "lat": 19.048,
+   "lon": 72.892,
+   "elevationM": 8.2,
+   "radiusMeters": 350
+  },
+  {
+   "name": "Bhandup (LBS Marg, Sonapur)",
+   "lat": 19.1545,
+   "lon": 72.937,
+   "elevationM": 10.7,
+   "radiusMeters": 350
+  }
+ ]
+}

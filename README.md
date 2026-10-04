@@ -1,14 +1,30 @@
 # 🌊 Mumbai Disaster Evacuation Route Planning & Optimization System
 
-> Hazard-aware evacuation routing and capacity-aware shelter assignment for Greater Mumbai, on a real OpenStreetMap road graph (8,851 nodes · 17,186 directed road segments).
+> Hazard-aware evacuation routing (drive, walk, or walk + suburban train) and capacity-aware shelter assignment for Greater Mumbai. It runs on a real OpenStreetMap network: 94,758 road nodes, 215,698 directed road segments including residential streets, 67 suburban stations, and elevation for every node.
 
-⚠️ **Student / research project — not an official emergency service.** Shelter sites and capacities are placeholder data, not the official BMC list. In an emergency call **112** or BMC **1916**.
+⚠️ **Student / research project — not an official emergency service.** Shelters are municipal schools and open grounds from OpenStreetMap with *estimated* capacities, not the official BMC list. In an emergency call **112** or BMC **1916**.
 
 ---
 
 ## 🌟 Features
 
-### 1. ⚡ Hazard-aware route planner
+### 0. 🗺️ Real data, rebuilt with one script
+`scripts/build_datasets.py` regenerates every dataset from open sources:
+
+| Dataset | Source | Notes |
+|---|---|---|
+| Road network (drivable + residential streets) | OpenStreetMap via OSMnx | Largest strongly connected component, so every node can reach every other |
+| Elevation of every node, station and shelter | Copernicus DEM GLO-30 | A surface model: good for telling low ground from high, less so for absolute heights |
+| Suburban railway | OpenStreetMap route relations | Western, Central, Harbour, Trans-Harbour and more, with stations in line order |
+| Shelters | OpenStreetMap municipal schools + large open grounds | Capacity estimated from campus area (Sphere 3.5 m²/person); open grounds aren't used during floods |
+| Monsoon flooding hotspots | Curated list (approximate locations) | Chronic water-logging spots; shown as a map layer and usable as a scenario |
+
+### 1. ⚡ Hazard-aware route planner — drive, walk or train
+- **Three travel modes.**
+  - 🚶 **Walk:** one-way streets don't apply.
+  - 🚆 **Train:** walk to a suburban station, wait, ride, walk on. The route shows a step-by-step itinerary like "Western Line from Andheri to Dadar, 6 stops".
+  - 🚗 **Drive:** uses live traffic when TomTom is configured.
+- **Elevation-aware during floods.** Low-lying roads and rail near an active flood are slowed (they're likely water-logged), so routes prefer higher ground. The card shows the lowest point on your route and warns if it's low. Flooded stations close, and trains won't stop there.
 - Routes **always stay out of active hazard zones**. With a TomTom key, the backend asks TomTom for a live-traffic route with every hazard zone passed as an *avoid-area*, then **verifies the geometry server-side**. Without a key, if TomTom fails, or if the route would enter a zone, it uses our own A* on the road graph with hazards applied.
 - **People inside a hazard zone can still get out.** Road-blocking hazards block roads leading *into* or *through* the zone, while roads leading *away* from the centre stay passable with a slow-down penalty.
 - Whole road segments are tested against hazard circles (not just their midpoints), so long segments that cross a zone are caught.
@@ -17,6 +33,7 @@
 ### 2. 🚨 Live hazard zones (operator-controlled)
 - Four hazard types: flood, fire, bridge collapse and chemical leak. Each one either **blocks roads** or adds **heavy congestion** (a travel-time multiplier).
 - Live hazards affect routing for everyone, so adding or removing them requires an **operator token** (`ADMIN_TOKEN`).
+- **"Heavy monsoon day"** button: floods every chronic water-logging spot at once.
 - Shelters inside a hazard zone (or flood-prone sites during a flood) are flagged **unsafe** and excluded.
 - **Demo mode** (on by default) brings the shelters to life. Each active zone gets an estimated number of people needing shelter (zone area × density × share evacuating). Every few seconds a batch of them arrives at the nearest safe shelters by road travel time, spilling over when a shelter fills. When hazards are cleared, shelters gradually empty. This data is simulated and labelled as such in the UI.
 
@@ -29,7 +46,22 @@ Runs the same scenario through two strategies and compares them side by side on 
 | Capacity | Ignored; shelters admit first-come-first-served and turn the rest away | Respected; large groups are **split** across shelters |
 | Traffic | Ignored when choosing routes | Each assignment adds vehicles/hour to its roads; routes slowed ≥ 20 % are **re-routed** |
 
-Both strategies are scored against the same traffic model: people → vehicles/hour (`EVAC_PERSONS_PER_VEHICLE`, `EVAC_WINDOW_HOURS`) compared with each road's capacity. Simulations run in a **sandbox** and never touch live hazards or shelter occupancy. Five presets are included, among them a western-suburbs stress test where the naive strategy overflows its shelters.
+**How Mumbai moves:** each group splits into walkers, train riders and drivers (default 50 / 30 / 20 %, adjustable with sliders).
+- **Drivers** load the roads: people → vehicles/hour, compared with road capacity.
+- **Train riders** load the suburban lines: persons/hour, compared with line capacity, so crowded trains slow down.
+- **Walkers** are assumed not to congest roads.
+
+Results are broken down by mode. Simulations run in a **sandbox** and never touch live hazards or shelter occupancy. Six presets are included: a western-suburbs stress test where the naive strategy overflows, and a "heavy monsoon day" with every chronic flooding spot underwater.
+
+### 3a. 📈 Evaluation: statistics, not single runs
+- **Monte Carlo:** re-runs a scenario N times with randomised group sizes (± %) and locations (within J m). Both strategies run on each copy, and the output is the **mean ± 95 % confidence interval**, standard deviation and min/max for every metric, plus how often capacity-aware wins. A per-run CSV export is included for your own analysis.
+- **Sensitivity analysis:** sweeps one assumption (people per vehicle, evacuation window, shelter capacity, walking share, train share) and charts how each strategy responds, with error bars.
+- Everything is seeded, so results are reproducible.
+- **Published results:** [`docs/evaluation-results.md`](docs/evaluation-results.md) has 30 randomised runs for every preset plus four sensitivity sweeps. Regenerate it with:
+  ```bash
+  cd backend && ./mvnw test -Dsurefire.excludedGroups= -Dgroups=report
+  ```
+  Headline: across all six scenarios, capacity-aware assignment housed at least as many people as the naive plan in 100 % of runs. On the western-suburbs stress test it housed 83.6 ± 1.1 % of evacuees, versus 3.9 ± 0.6 % for naive.
 
 The Command Centre also benchmarks **Dijkstra vs A\*** on long corridors. Both return the same optimal travel time, and A\* explores far fewer nodes.
 
@@ -52,7 +84,7 @@ First-aid steps, do's and don'ts, emergency kits and hospital contacts for each 
 |---|---|
 | Backend | Java 17, Spring Boot 3.5, Bean Validation, Actuator |
 | Frontend | React 18, Vite 5, React-Leaflet, CSS Modules, Vitest |
-| Data | Python 3 + OSMnx (`scripts/extract_mumbai_graph.py`) |
+| Data | Python 3, OSMnx, Rasterio (`scripts/build_datasets.py`) |
 | Services | TomTom Routing/Search (optional), Google Gemini (optional), Photon, Nominatim |
 | CI | GitHub Actions (backend `mvn verify`, frontend tests + build) |
 
@@ -128,7 +160,12 @@ cd frontend && npm test
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/live-route` | Hazard-aware route `{fromLat, fromLon, toLat, toLon}` |
+| `POST` | `/api/live-route` | Hazard-aware route `{fromLat, fromLon, toLat, toLon, mode?}` — mode `DRIVE` / `WALK` / `TRANSIT` |
+| `GET` | `/api/flood-hotspots` · `/api/rail/stations` | Monsoon flooding spots / suburban stations (with open/closed status) |
+| `POST` | `/api/disasters/monsoon` | 🔒 Flood every chronic water-logging spot |
+| `POST` | `/api/evaluation/monte-carlo` | Repeated randomised runs → mean, sd, 95 % CI per metric and strategy |
+| `POST` | `/api/evaluation/sensitivity` | Sweep one assumption (`PERSONS_PER_VEHICLE`, `WINDOW_HOURS`, `CAPACITY_SCALE`, `WALK_SHARE`, `TRANSIT_SHARE`) |
+| `GET` | `/api/evacuation/defaults` | Default simulation assumptions |
 | `GET` | `/api/search?q=` · `/api/geocode?lat=&lon=` | Place autocomplete / reverse geocoding |
 | `GET` | `/api/shelters` | Shelters with occupancy and `unsafe` flag |
 | `POST` | `/api/shelters/{id}/capacity` · `/occupancy` | 🔒 Update shelter capacity / occupancy |
@@ -149,11 +186,19 @@ cd frontend && npm test
 
 ## 🗺️ Data & known limitations
 
-- **Coverage:** the road graph spans roughly Colaba to Thane (lat 18.90–19.32, lon 72.78–73.00) and includes motorway to tertiary roads only. Points more than 2 km from the network are reported as out of coverage. To extend it (e.g. Navi Mumbai, Mira-Bhayandar, residential streets), regenerate the graph:
+- **Regenerating data:** the data needs Python 3.10+ plus the packages in `scripts/requirements.txt`. Create a virtual environment and install them:
   ```bash
-  python scripts/extract_mumbai_graph.py --bbox 72.75 18.88 73.15 19.50 --residential
+  python -m venv .venv && .venv/Scripts/pip install -r scripts/requirements.txt
   ```
-- **Shelters** (`backend/src/main/resources/data/shelters.json`) are unverified placeholders. Replace them with the official BMC/MCGM list and set `floodProne` for low-lying sites.
+  Then run:
+  ```bash
+  .venv/Scripts/python scripts/build_datasets.py
+  ```
+  Options: `--bbox W S E N` covers a different area (e.g. add Mira-Bhayandar or more of Navi Mumbai); `--no-residential` gives a smaller, faster graph. Downloads are cached in `scripts/.cache/` (gitignored, safe to delete).
+- **Shelters** are municipal schools mapped in OpenStreetMap (incomplete — BMC runs many more) plus open grounds. Capacities are estimates. Swap in the official BMC/MCGM list when you have it; the JSON format is documented in the file.
+- **Elevation** is a surface model (it includes buildings), so treat it as relative. The water-logging penalty is a modelling assumption, not a hydrological simulation.
+- **Flood hotspots** are approximate and not an official list.
+- **Trains** use average speeds and a fixed emergency capacity (30,000 people/hour per line and direction), not real timetables.
 - **Hospital and helpline numbers** in the guides should be re-verified periodically.
 - Live state (hazards, occupancy) is in memory and single-instance. It resets on restart.
 

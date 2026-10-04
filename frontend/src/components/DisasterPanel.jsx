@@ -53,6 +53,18 @@ export default function DisasterPanel({ disasters, operatorTokenRequired, onDisa
     }
   }
 
+  async function handleMonsoon() {
+    setLoading(true);
+    try {
+      await API.activateMonsoonHotspots();
+    } catch (e) {
+      onError?.(`Could not activate monsoon hotspots: ${describe(e)}`);
+    } finally {
+      setLoading(false);
+      onDisastersChange();
+    }
+  }
+
   function saveToken(value) {
     setToken(value);
     API.setOperatorToken(value.trim());
@@ -142,6 +154,15 @@ export default function DisasterPanel({ disasters, operatorTokenRequired, onDisa
               disabled={!radiusValid || (operatorTokenRequired && !token.trim())}
             >
               📍 Click Map to Place Hazard
+            </button>
+
+            <button
+              className={styles.btnSmall}
+              onClick={handleMonsoon}
+              disabled={loading || (operatorTokenRequired && !token.trim())}
+              title="Floods every chronic water-logging spot at once; nearby low-lying roads slow down"
+            >
+              💧 Simulate a heavy monsoon day (flood all chronic spots)
             </button>
           </div>
 

@@ -7,6 +7,7 @@ import com.mumbai.evacuation.dto.LiveRouteResponse;
 import com.mumbai.evacuation.dto.RouteResponse;
 import com.mumbai.evacuation.model.GeoUtils;
 import com.mumbai.evacuation.model.Shelter;
+import com.mumbai.evacuation.model.TravelMode;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -54,7 +55,12 @@ public class LiveRouteService {
                 .map(Shelter::getName)
                 .ifPresent(name -> warnings.add(name + " is currently unsafe (inside a hazard zone or flood-prone during a flood)."));
 
-        if (tomTomService.isConfigured() && !originInZone && !destInZone && disasters.size() <= TomTomService.MAX_AVOID_AREAS) {
+        TravelMode mode = req.modeOrDefault();
+        boolean floodActive = graphService.isFloodActive();
+        // Live traffic only matters for driving, and TomTom knows nothing about elevation,
+        // so during floods the elevation-aware graph route is preferred.
+        if (mode == TravelMode.DRIVE && tomTomService.isConfigured() && !originInZone && !destInZone && !floodActive
+                && disasters.size() <= TomTomService.MAX_AVOID_AREAS) {
             Optional<TomTomService.TomTomRoute> live = tomTomService.route(req.fromLat(), req.fromLon(), req.toLat(), req.toLon(), disasters);
             if (live.isPresent() && !live.get().points().isEmpty() && avoidsAllZones(live.get().points(), disasters)) {
                 LiveRouteResponse response = fromTomTom(live.get(), !disasters.isEmpty());
@@ -63,9 +69,22 @@ public class LiveRouteService {
             }
         }
 
-        LiveRouteResponse response = fromGraph(graphService.computeRoute(req.fromLat(), req.fromLon(), req.toLat(), req.toLon()));
-        if (tomTomService.isConfigured() && response.isPathFound()) {
-            warnings.add("Live traffic unavailable for this route — times assume free-flowing traffic.");
+        RouteResponse graphRoute = graphService.computeRoute(req.fromLat(), req.fromLon(), req.toLat(), req.toLon(), mode);
+        LiveRouteResponse response = fromGraph(graphRoute);
+        if (mode == TravelMode.DRIVE && tomTomService.isConfigured() && response.isPathFound()) {
+            warnings.add(floodActive
+                    ? "Flood active: using the elevation-aware route instead of live traffic."
+                    : "Live traffic unavailable for this route — times assume free-flowing traffic.");
+        }
+        if (floodActive && graphRoute.getLowestElevationM() != null
+                && graphRoute.getLowestElevationM() <= HazardOverlay.LOW_LYING_M) {
+            warnings.add(String.format(Locale.US,
+                    "Part of this route is low-lying (about %.0f m above sea level) and may be water-logged. Avoid wading through water.",
+                    graphRoute.getLowestElevationM()));
+        }
+        if (mode == TravelMode.TRANSIT && response.isPathFound()
+                && response.getLegs().stream().noneMatch(l -> "TRAIN".equals(l.type()))) {
+            warnings.add("Walking is faster than taking a train for this trip (or no open station is on the way).");
         }
         response.getWarnings().addAll(warnings);
         return response;
@@ -140,6 +159,7 @@ public class LiveRouteService {
     private static LiveRouteResponse fromGraph(RouteResponse graphRoute) {
         LiveRouteResponse resp = new LiveRouteResponse();
         resp.setRouteSource("ROAD_GRAPH");
+        resp.setTravelMode(graphRoute.getTravelMode());
         resp.setPathFound(graphRoute.isPathFound());
         resp.setLiveStatus(graphRoute.getLiveRouteStatus());
         resp.setAdvisoryMessage(graphRoute.getLiveAdvisoryMessage());
@@ -150,21 +170,25 @@ public class LiveRouteService {
         resp.setFreeFlowTravelTimeMinutes((int) Math.max(1, Math.round(graphRoute.getFreeFlowTravelTimeMinutes())));
         resp.setDelayMinutes((int) Math.round(graphRoute.getCongestionDelayMinutes()));
         resp.setRouteCoordinates(graphRoute.getRawCoordinates());
+        resp.setLowestElevationM(graphRoute.getLowestElevationM());
+        resp.setLegs(graphRoute.getLegs());
 
-        // Merge consecutive edges with the same hazard factor into one coloured segment.
+        // Merge consecutive edges with the same hazard factor and kind into one styled segment.
         List<LiveRouteResponse.SegmentInfo> segments = new ArrayList<>();
         List<double[]> current = new ArrayList<>();
         double currentFactor = Double.NaN;
+        String currentKind = null;
         for (RouteResponse.SegmentDetail s : graphRoute.getSegmentDetails()) {
-            if (current.isEmpty() || s.congestionFactor() != currentFactor) {
-                if (!current.isEmpty()) segments.add(new LiveRouteResponse.SegmentInfo(current, currentFactor));
+            if (current.isEmpty() || s.congestionFactor() != currentFactor || !s.kind().equals(currentKind)) {
+                if (!current.isEmpty()) segments.add(new LiveRouteResponse.SegmentInfo(current, currentFactor, currentKind));
                 current = new ArrayList<>();
                 current.add(new double[]{s.startLat(), s.startLon()});
                 currentFactor = s.congestionFactor();
+                currentKind = s.kind();
             }
             current.add(new double[]{s.endLat(), s.endLon()});
         }
-        if (!current.isEmpty()) segments.add(new LiveRouteResponse.SegmentInfo(current, currentFactor));
+        if (!current.isEmpty()) segments.add(new LiveRouteResponse.SegmentInfo(current, currentFactor, currentKind));
         resp.setSegments(segments);
 
         if (graphRoute.getSourceSnapMeters() > 300) {

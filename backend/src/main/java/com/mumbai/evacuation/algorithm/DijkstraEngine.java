@@ -28,6 +28,16 @@ public class DijkstraEngine {
      * (or the reachable graph is exhausted).
      */
     public ShortestPathTree searchToTargets(Graph graph, EdgeCost cost, long sourceNodeId, Set<Long> targets) {
+        return searchToTargets(graph, cost, sourceNodeId, targets, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Like {@link #searchToTargets(Graph, EdgeCost, long, Set)} but stops once
+     * {@code maxTargets} targets are settled. Dijkstra settles nodes in order of
+     * cost, so the first k settled targets are exactly the k nearest — e.g.
+     * {@code maxTargets = 1} finds the nearest shelter without exploring the city.
+     */
+    public ShortestPathTree searchToTargets(Graph graph, EdgeCost cost, long sourceNodeId, Set<Long> targets, int maxTargets) {
         long start = System.nanoTime();
         Map<Long, Double> best = new HashMap<>();
         Map<Long, Edge> parent = new HashMap<>();
@@ -39,12 +49,16 @@ public class DijkstraEngine {
             queue.add(new QueueEntry(sourceNodeId, 0.0));
         }
         Set<Long> remaining = new HashSet<>(targets);
+        int found = 0;
 
-        while (!queue.isEmpty() && !remaining.isEmpty()) {
+        while (!queue.isEmpty() && !remaining.isEmpty() && found < maxTargets) {
             QueueEntry current = queue.poll();
             long u = current.nodeId();
             if (!settled.add(u)) continue;
-            remaining.remove(u);
+            if (remaining.remove(u)) {
+                found++;
+                if (found >= maxTargets) break;
+            }
 
             for (Edge edge : graph.getOutgoingEdges(u)) {
                 long v = edge.getTargetNodeId();

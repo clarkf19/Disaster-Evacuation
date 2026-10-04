@@ -13,13 +13,22 @@ public class AStarEngine {
 
     private record QueueEntry(long nodeId, double fScore) {}
 
+    /** Driving search: the heuristic uses the fastest road speed limit. */
     public PathResult findShortestPath(Graph graph, EdgeCost cost, long sourceNodeId, long targetNodeId) {
+        return findShortestPath(graph, cost, sourceNodeId, targetNodeId, graph.getMaxRoadSpeedKmH());
+    }
+
+    /**
+     * @param maxSpeedKmH an upper bound on speed for the mode being searched; every
+     *                    finite edge cost must be >= distance / maxSpeed (admissibility)
+     */
+    public PathResult findShortestPath(Graph graph, EdgeCost cost, long sourceNodeId, long targetNodeId, double maxSpeedKmH) {
         long start = System.nanoTime();
         Node targetNode = graph.getNode(targetNodeId);
         if (graph.getNode(sourceNodeId) == null || targetNode == null) {
             return PathResult.emptyResult(0, System.nanoTime() - start);
         }
-        double maxSpeed = graph.getMaxSpeedKmH();
+        double maxSpeed = maxSpeedKmH;
 
         Map<Long, Double> gScore = new HashMap<>();
         Map<Long, Edge> parent = new HashMap<>();

@@ -8,8 +8,9 @@
  */
 import { fetchLiveRoute, fetchPlaceName, fetchPlaceSuggestions } from './backendApi';
 
-export async function calcLiveRoute(fromLat, fromLon, toLat, toLon) {
-  return normalizeResponse(await fetchLiveRoute(fromLat, fromLon, toLat, toLon));
+/** mode: 'DRIVE' | 'WALK' | 'TRANSIT' (walk + suburban train) */
+export async function calcLiveRoute(fromLat, fromLon, toLat, toLon, mode = 'DRIVE') {
+  return normalizeResponse(await fetchLiveRoute(fromLat, fromLon, toLat, toLon, mode));
 }
 
 /** Human-readable place name for coordinates; falls back to the raw coordinates. */
@@ -40,11 +41,18 @@ export function coordinateLabel(lat, lon) {
 export function normalizeResponse(data) {
   const segments = (data.segments || [])
     .filter(seg => Array.isArray(seg.points) && seg.points.length > 1)
-    .map(seg => ({ points: seg.points, congestion: factorToCongestion(seg.congestionFactor) }));
+    .map(seg => ({
+      points: seg.points,
+      congestion: factorToCongestion(seg.congestionFactor),
+      kind: seg.kind || 'drive',
+    }));
 
   return {
     found:           Boolean(data.pathFound),
     source:          data.routeSource || 'ROAD_GRAPH',
+    mode:            data.travelMode || 'DRIVE',
+    legs:            data.legs || [],
+    lowestElevationM: data.lowestElevationM ?? null,
     distanceKm:      data.distanceKm ?? 0,
     liveMinutes:     data.liveTravelTimeMinutes ?? 0,
     freeFlowMinutes: data.freeFlowTravelTimeMinutes ?? 0,

@@ -3,6 +3,12 @@ import { reverseGeocode, searchPlaces } from '../services/routingApi';
 import LiveAdvisoryCard from './LiveAdvisoryCard';
 import styles from './RoutePlanner.module.css';
 
+const TRAVEL_MODES = [
+  { value: 'WALK', icon: '🚶', label: 'Walk', hint: 'On foot — one-way streets don’t apply' },
+  { value: 'TRANSIT', icon: '🚆', label: 'Train', hint: 'Walk to a suburban station, take the local train, walk on' },
+  { value: 'DRIVE', icon: '🚗', label: 'Drive', hint: 'Car or bus — live traffic when available' },
+];
+
 /** Straight-line distance in km (for sorting shelters by proximity). */
 function distanceKm(a, b) {
   const R = 6371;
@@ -26,6 +32,8 @@ export default function RoutePlanner({
   onDestSet,
   routeResult,
   shelters = [],
+  travelMode = 'DRIVE',
+  onTravelModeChange,
 }) {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState('');
@@ -66,6 +74,22 @@ export default function RoutePlanner({
       <div className={styles.header}>
         <h2>Evacuation Route Planner</h2>
         <p className={styles.sub}>Set locations by typing, using GPS, or clicking the map. Routes always avoid active hazard zones.</p>
+      </div>
+
+      <div className={styles.modeSwitch} role="radiogroup" aria-label="Travel mode">
+        {TRAVEL_MODES.map(m => (
+          <button
+            key={m.value}
+            type="button"
+            role="radio"
+            aria-checked={travelMode === m.value}
+            className={`${styles.modeOption} ${travelMode === m.value ? styles.modeOptionActive : ''}`}
+            onClick={() => onTravelModeChange?.(m.value)}
+            title={m.hint}
+          >
+            <span aria-hidden="true">{m.icon}</span> {m.label}
+          </button>
+        ))}
       </div>
 
       <LocationSearch
@@ -173,7 +197,10 @@ function ShelterPicker({ shelters, origin, onSelect, selectedDest }) {
         aria-label="Filter shelters"
       />
       <div className={styles.shelterPickerList}>
-        {filtered.map(s => {
+        {filtered.length > 40 && (
+          <p className={styles.noResults}>Showing the first 40 of {filtered.length} — type to filter.</p>
+        )}
+        {filtered.slice(0, 40).map(s => {
           const barColor = s.unsafe ? '#94a3b8' : s.pct >= 90 ? '#ea4335' : s.pct >= 70 ? '#f97316' : '#34a853';
           const isSelected = selectedDest?.name?.startsWith(s.name);
           const disabled = s.unsafe || s.isFull;

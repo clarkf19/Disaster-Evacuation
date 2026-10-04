@@ -1,6 +1,75 @@
 import { useEffect, useState } from 'react';
 import * as API from '../services/backendApi';
+import EvaluationPanel from './EvaluationPanel';
 import styles from './CommandCentre.module.css';
+
+/** Assumption controls; walk + train shares are percentages, the rest drive. */
+function Assumptions({ params, onChange }) {
+  if (!params) return null;
+  const set = (key, value) => onChange({ ...params, [key]: value });
+  const walk = Math.round(params.walkShare * 100);
+  const transit = Math.round(params.transitShare * 100);
+  return (
+    <details className={styles.assumptions}>
+      <summary>Assumptions — {walk}% walk · {transit}% train · {100 - walk - transit}% drive</summary>
+      <label className={styles.sliderRow}>
+        <span>🚶 Walk {walk}%</span>
+        <input type="range" min="0" max="100" step="5" value={walk}
+               onChange={e => {
+                 const w = Number(e.target.value) / 100;
+                 onChange({ ...params, walkShare: w, transitShare: Math.min(params.transitShare, 1 - w) });
+               }} />
+      </label>
+      <label className={styles.sliderRow}>
+        <span>🚆 Train {transit}%</span>
+        <input type="range" min="0" max="100" step="5" value={transit}
+               onChange={e => {
+                 const t = Number(e.target.value) / 100;
+                 onChange({ ...params, transitShare: t, walkShare: Math.min(params.walkShare, 1 - t) });
+               }} />
+      </label>
+      <label className={styles.sliderRow}>
+        <span>🚗 People per vehicle {params.personsPerVehicle}</span>
+        <input type="range" min="1" max="40" step="1" value={params.personsPerVehicle}
+               onChange={e => set('personsPerVehicle', Number(e.target.value))} />
+      </label>
+      <label className={styles.sliderRow}>
+        <span>⏱ Evacuation window {params.evacuationWindowHours} h</span>
+        <input type="range" min="0.5" max="12" step="0.5" value={params.evacuationWindowHours}
+               onChange={e => set('evacuationWindowHours', Number(e.target.value))} />
+      </label>
+      <label className={styles.sliderRow}>
+        <span>⛺ Shelter capacity ×{params.capacityScale}</span>
+        <input type="range" min="0.25" max="3" step="0.25" value={params.capacityScale}
+               onChange={e => set('capacityScale', Number(e.target.value))} />
+      </label>
+    </details>
+  );
+}
+
+const MODE_ICON = { WALK: '🚶 Walk', TRANSIT: '🚆 Train', DRIVE: '🚗 Drive' };
+
+function ModeTable({ naive, aware }) {
+  const modes = Object.keys(aware.byMode || {});
+  if (modes.length === 0) return null;
+  return (
+    <table className={styles.table}>
+      <thead>
+        <tr><th>Mode</th><th>People</th><th>Avg min (naive)</th><th>Avg min (aware)</th></tr>
+      </thead>
+      <tbody>
+        {modes.map(m => (
+          <tr key={m}>
+            <td>{MODE_ICON[m] || m}</td>
+            <td>{aware.byMode[m].persons.toLocaleString()}</td>
+            <td>{naive.byMode?.[m]?.avgMinutes ?? '—'}</td>
+            <td>{aware.byMode[m].avgMinutes}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
 
 /**
  * Command Centre — runs sandboxed evacuation simulations (naive nearest-shelter
@@ -14,6 +83,7 @@ export default function CommandCentre({ simulation, onSimulationChange }) {
   const [error, setError] = useState('');
   const [benchmark, setBenchmark] = useState(null);
   const [benchRunning, setBenchRunning] = useState(false);
+  const [params, setParams] = useState(simulation?.comparison?.scenario?.params || null);
 
   const initialScenarioId = simulation?.comparison?.scenario?.id;
   useEffect(() => {
@@ -23,13 +93,16 @@ export default function CommandCentre({ simulation, onSimulationChange }) {
         setScenarioId(prev => prev || initialScenarioId || list[0]?.id || '');
       })
       .catch(e => setError(e.message));
+    API.getSimulationDefaults()
+      .then(d => setParams(prev => prev || d))
+      .catch(() => {});
   }, [initialScenarioId]);
 
   async function runComparison() {
     setRunning(true);
     setError('');
     try {
-      const comparison = await API.compareStrategies(scenarioId);
+      const comparison = await API.compareStrategies(scenarioId, params || {});
       onSimulationChange({ comparison, strategy: simulation?.strategy || 'capacityAware' });
     } catch (e) {
       setError(e.message);
@@ -72,6 +145,8 @@ export default function CommandCentre({ simulation, onSimulationChange }) {
           </p>
         )}
 
+        <Assumptions params={params} onChange={setParams} />
+
         <button className={styles.btnPrimary} onClick={runComparison} disabled={running || !scenarioId}>
           {running ? 'Running simulation…' : '▶ Run Both Strategies'}
         </button>
@@ -88,6 +163,7 @@ export default function CommandCentre({ simulation, onSimulationChange }) {
           </div>
 
           <MetricsTable naive={comparison.naive} aware={comparison.capacityAware} />
+          <ModeTable naive={comparison.naive} aware={comparison.capacityAware} />
 
           <div className={styles.toggle} role="radiogroup" aria-label="Strategy shown on map">
             {[['naive', 'Show naive on map'], ['capacityAware', 'Show capacity-aware on map']].map(([key, label]) => (
@@ -111,11 +187,16 @@ export default function CommandCentre({ simulation, onSimulationChange }) {
             </p>
           )}
           <p className={styles.note}>
-            Traffic model: {comparison.scenario.personsPerVehicle} people per vehicle, leaving over {comparison.scenario.evacuationWindowHours} h.
+            Assumptions: {Math.round(comparison.scenario.params.walkShare * 100)}% walk,{' '}
+            {Math.round(comparison.scenario.params.transitShare * 100)}% train, rest drive
+            ({comparison.scenario.params.personsPerVehicle} per vehicle) over {comparison.scenario.params.evacuationWindowHours} h.
             Dashed routes = people turned away at a full shelter. Hover routes for details.
+            A single run can mislead — use the evaluation below for averages.
           </p>
         </section>
       )}
+
+      <EvaluationPanel scenarioId={scenarioId} params={params} />
 
       <section className={styles.section}>
         <h2>Algorithm Benchmark</h2>
@@ -154,6 +235,7 @@ const ROWS = [
   ['Avg distance (km)', m => m.avgTravelDistanceKm, 'lower'],
   ['Shelters over capacity', m => m.sheltersOverCapacity, 'lower'],
   ['Congested road (km)', m => m.congestedRoadKm, 'lower'],
+  ['Crowded rail (km)', m => m.crowdedRailKm, 'lower'],
   ['Re-routed groups', m => m.reroutedAllocations, null],
   ['Compute time (ms)', m => m.executionTimeMs, null],
 ];

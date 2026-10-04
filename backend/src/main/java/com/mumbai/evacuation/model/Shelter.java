@@ -14,9 +14,20 @@ public class Shelter {
     private int totalCapacity;
     private int currentOccupancy;
 
+    private final double elevationM;
+    private final String kind;
+
     public Shelter(long id, String name, double latitude, double longitude, long nearestNodeId,
                    int totalCapacity, boolean floodProne) {
+        this(id, name, latitude, longitude, nearestNodeId, totalCapacity, floodProne, Double.NaN, "school");
+    }
+
+    /** @param kind "school" (indoor shelter) or "open_ground" (open-air assembly point) */
+    public Shelter(long id, String name, double latitude, double longitude, long nearestNodeId,
+                   int totalCapacity, boolean floodProne, double elevationM, String kind) {
         if (totalCapacity <= 0) throw new IllegalArgumentException("Shelter capacity must be positive: " + name);
+        this.elevationM = elevationM;
+        this.kind = kind == null ? "school" : kind;
         this.id = id;
         this.name = name;
         this.latitude = latitude;
@@ -34,6 +45,12 @@ public class Shelter {
 
     /** Low-lying site that must not be used as a shelter during floods. */
     public boolean isFloodProne() { return floodProne; }
+
+    /** Ground elevation in metres (surface model), NaN if unknown. */
+    public double getElevationM() { return elevationM; }
+
+    /** "school" (indoor) or "open_ground" (open-air assembly point). */
+    public String getKind() { return kind; }
 
     public synchronized int getTotalCapacity() { return totalCapacity; }
     public synchronized int getCurrentOccupancy() { return currentOccupancy; }

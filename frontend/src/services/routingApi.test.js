@@ -36,6 +36,26 @@ describe('normalizeResponse', () => {
     expect(r.segments[0].congestion).toBe('heavy');
   });
 
+  it('keeps travel mode, itinerary legs, segment kinds and elevation', () => {
+    const r = normalizeResponse({
+      pathFound: true,
+      travelMode: 'TRANSIT',
+      lowestElevationM: 4.2,
+      legs: [
+        { type: 'WALK', minutes: 6, distanceKm: 0.4 },
+        { type: 'TRAIN', line: 'Western Line', fromName: 'Andheri', toName: 'Dadar', minutes: 18, stops: 6 },
+      ],
+      segments: [
+        { points: [[19.1, 72.84], [19.11, 72.85]], congestionFactor: 1.0, kind: 'walk' },
+        { points: [[19.11, 72.85], [19.02, 72.84]], congestionFactor: 1.0, kind: 'rail' },
+      ],
+    });
+    expect(r.mode).toBe('TRANSIT');
+    expect(r.lowestElevationM).toBe(4.2);
+    expect(r.legs.map(l => l.type)).toEqual(['WALK', 'TRAIN']);
+    expect(r.segments.map(s => s.kind)).toEqual(['walk', 'rail']);
+  });
+
   it('reports an unpassable route as not found', () => {
     const r = normalizeResponse({ pathFound: false, liveStatus: 'UNPASSABLE', advisoryMessage: 'blocked' });
     expect(r.found).toBe(false);

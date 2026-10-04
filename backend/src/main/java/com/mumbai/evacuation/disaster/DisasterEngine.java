@@ -31,6 +31,12 @@ public class DisasterEngine {
         rebuild();
     }
 
+    /** Adds several disasters with a single overlay rebuild. */
+    public synchronized void addDisasters(Collection<DisasterEvent> events) {
+        events.forEach(e -> activeDisasters.put(e.getId(), e));
+        rebuild();
+    }
+
     /** @return false if no disaster with that id existed */
     public synchronized boolean removeDisaster(String disasterId) {
         if (activeDisasters.remove(disasterId) == null) return false;

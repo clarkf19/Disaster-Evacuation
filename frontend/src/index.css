@@ -112,6 +112,28 @@ html, body, #root {
   .disaster-marker-shake { animation: none; }
 }
 
+.map-layer-toggles {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1500;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+}
+
+.map-layer-toggles label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
 .popup-action {
   margin-top: 8px;
   width: 100%;

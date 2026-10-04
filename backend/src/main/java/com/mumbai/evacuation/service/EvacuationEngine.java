@@ -1,6 +1,7 @@
 package com.mumbai.evacuation.service;
 
 import com.mumbai.evacuation.algorithm.AStarEngine;
+import com.mumbai.evacuation.algorithm.CostModel;
 import com.mumbai.evacuation.algorithm.DijkstraEngine;
 import com.mumbai.evacuation.algorithm.EdgeCost;
 import com.mumbai.evacuation.algorithm.ShortestPathTree;
@@ -9,6 +10,7 @@ import com.mumbai.evacuation.disaster.DisasterType;
 import com.mumbai.evacuation.disaster.HazardOverlay;
 import com.mumbai.evacuation.dto.DisasterRequest;
 import com.mumbai.evacuation.dto.EvacuationBenchmarkResult.*;
+import com.mumbai.evacuation.dto.SimulationParams;
 import com.mumbai.evacuation.dto.SimulationRequest;
 import com.mumbai.evacuation.model.*;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,36 +20,39 @@ import java.util.*;
 
 /**
  * Sandboxed evacuation simulator comparing a naive baseline with a
- * capacity- and congestion-aware assignment strategy.
+ * capacity- and congestion-aware assignment strategy, for a mix of travel modes.
  *
- * Every run builds its own hazard overlay, traffic map and shelter ledger, so
- * simulations are deterministic, thread-safe, and never leak into live routing.
+ * Every run builds its own load map and shelter ledger, so simulations are
+ * deterministic, thread-safe (they can run in parallel), and never leak into
+ * live routing.
  *
- * Traffic model: evacuees are converted to vehicles ({@code personsPerVehicle})
- * spread over an evacuation window ({@code evacuationWindowHours}) to get a flow
- * in vehicles/hour, which is compared with each road's capacity (vehicles/hour)
- * to pick a congestion factor (see {@link Edge#congestionFactorFor}).
+ * Modes: each group is split into walkers, train riders (walk + suburban rail)
+ * and drivers according to {@link SimulationParams}. Drivers load roads
+ * (people / persons-per-vehicle / window → vehicles/hour vs. road capacity);
+ * train riders load rail links (people / window → persons/hour vs. line
+ * capacity); walkers are assumed not to congest roads.
  *
- * NAIVE_NEAREST: each group drives to the shelter that is fastest on empty
- * roads. Nobody checks capacity; shelters admit arrivals first-come-first-served
- * and turn the rest away. Travel times are then evaluated under the traffic all
- * groups create together, so both strategies are judged by the same physics.
+ * NAIVE_NEAREST: each sub-group goes to the shelter that is fastest on empty
+ * roads/trains. Nobody checks capacity; shelters admit arrivals first-come-
+ * first-served and turn the rest away. Travel times are then evaluated under
+ * the load all sub-groups create together, so both strategies are judged by the
+ * same physics.
  *
  * CAPACITY_AWARE: groups are processed in priority order (inside a hazard zone
- * first, then largest first). Each group is sent to the fastest shelter with
- * free space given the traffic already assigned; groups that don't fit are split
- * across several shelters. After all assignments, any route whose travel time
- * grew by >= 20% because of later traffic is recomputed (re-routing pass).
+ * first, then largest first). Each sub-group goes to the fastest shelter with
+ * free space given the load already assigned, splitting across shelters when
+ * needed. After all assignments, any route whose travel time grew by >= 20%
+ * because of later load is recomputed (re-routing pass).
  */
 @Service
 public class EvacuationEngine {
 
     static final double REROUTE_THRESHOLD = 0.20;
+    private static final List<TravelMode> MODE_ORDER = List.of(TravelMode.WALK, TravelMode.TRANSIT, TravelMode.DRIVE);
 
     private final GraphService graphService;
     private final ShelterService shelterService;
-    private final double personsPerVehicle;
-    private final double evacuationWindowHours;
+    private final SimulationParams defaults;
     private final DijkstraEngine dijkstra = new DijkstraEngine();
     private final AStarEngine aStar = new AStarEngine();
     private final List<Scenario> presets;
@@ -55,18 +60,18 @@ public class EvacuationEngine {
     public record Scenario(String id, String name, String description,
                            List<DisasterEvent> disasters, List<EvacueeGroup> groups) {}
 
-    public EvacuationEngine(GraphService graphService, ShelterService shelterService,
+    public EvacuationEngine(GraphService graphService, ShelterService shelterService, FloodHotspotService hotspots,
                             @Value("${evacuation.persons-per-vehicle:4}") double personsPerVehicle,
-                            @Value("${evacuation.window-hours:3}") double evacuationWindowHours) {
-        if (personsPerVehicle <= 0 || evacuationWindowHours <= 0) {
-            throw new IllegalArgumentException("evacuation.persons-per-vehicle and evacuation.window-hours must be positive");
-        }
+                            @Value("${evacuation.window-hours:3}") double evacuationWindowHours,
+                            @Value("${evacuation.walk-share:0.5}") double walkShare,
+                            @Value("${evacuation.transit-share:0.3}") double transitShare) {
         this.graphService = graphService;
         this.shelterService = shelterService;
-        this.personsPerVehicle = personsPerVehicle;
-        this.evacuationWindowHours = evacuationWindowHours;
-        this.presets = buildPresets();
+        this.defaults = new SimulationParams(personsPerVehicle, evacuationWindowHours, 1.0, walkShare, transitShare);
+        this.presets = buildPresets(hotspots);
     }
+
+    public SimulationParams getDefaults() { return defaults; }
 
     // ------------------------------------------------------------------ scenarios
 
@@ -85,11 +90,15 @@ public class EvacuationEngine {
         return list;
     }
 
+    public Scenario preset(String id) {
+        return presets.stream().filter(s -> s.id().equalsIgnoreCase(id)).findFirst()
+                .orElseThrow(() -> new NoSuchElementException("Unknown scenario: " + id));
+    }
+
     /** Turns an API request into a scenario (preset by id, or custom groups + disasters). */
     public Scenario resolve(SimulationRequest request) {
         if (request.scenarioId() != null && !request.scenarioId().isBlank()) {
-            return presets.stream().filter(s -> s.id().equalsIgnoreCase(request.scenarioId())).findFirst()
-                    .orElseThrow(() -> new NoSuchElementException("Unknown scenario: " + request.scenarioId()));
+            return preset(request.scenarioId());
         }
         if (request.groups() == null || request.groups().isEmpty()) {
             throw new IllegalArgumentException("Provide a scenarioId or at least one evacuee group");
@@ -118,21 +127,33 @@ public class EvacuationEngine {
 
     // ------------------------------------------------------------------ simulation
 
+    public Comparison compare(Scenario scenario, SimulationParams params) {
+        HazardOverlay overlay = overlayFor(scenario);
+        StrategyMetrics naive = simulate(scenario, overlay, EvacuationStrategy.NAIVE_NEAREST, params);
+        StrategyMetrics aware = simulate(scenario, overlay, EvacuationStrategy.CAPACITY_AWARE, params);
+        return new Comparison(summarize(scenario, overlay, params), naive, aware);
+    }
+
     public Comparison compare(Scenario scenario) {
-        HazardOverlay overlay = HazardOverlay.build(graphService.getGraph(), scenario.disasters());
-        StrategyMetrics naive = simulate(scenario, overlay, EvacuationStrategy.NAIVE_NEAREST);
-        StrategyMetrics aware = simulate(scenario, overlay, EvacuationStrategy.CAPACITY_AWARE);
-        return new Comparison(summarize(scenario, overlay), naive, aware);
+        return compare(scenario, defaults);
+    }
+
+    public StrategyMetrics simulate(Scenario scenario, EvacuationStrategy strategy, SimulationParams params) {
+        return simulate(scenario, overlayFor(scenario), strategy, params);
     }
 
     public StrategyMetrics simulate(Scenario scenario, EvacuationStrategy strategy) {
-        HazardOverlay overlay = HazardOverlay.build(graphService.getGraph(), scenario.disasters());
-        return simulate(scenario, overlay, strategy);
+        return simulate(scenario, strategy, defaults);
     }
 
-    private StrategyMetrics simulate(Scenario scenario, HazardOverlay overlay, EvacuationStrategy strategy) {
+    public HazardOverlay overlayFor(Scenario scenario) {
+        return HazardOverlay.build(graphService.getGraph(), scenario.disasters());
+    }
+
+    /** Runs one strategy against a prebuilt overlay (lets evaluations reuse it across many runs). */
+    public StrategyMetrics simulate(Scenario scenario, HazardOverlay overlay, EvacuationStrategy strategy, SimulationParams params) {
         long start = System.currentTimeMillis();
-        Run run = new Run(overlay);
+        Run run = new Run(overlay, params);
         if (strategy == EvacuationStrategy.NAIVE_NEAREST) {
             run.naive(scenario.groups());
         } else {
@@ -141,7 +162,7 @@ public class EvacuationEngine {
         return run.metrics(strategy, scenario.groups(), System.currentTimeMillis() - start);
     }
 
-    private ScenarioSummary summarize(Scenario scenario, HazardOverlay overlay) {
+    private ScenarioSummary summarize(Scenario scenario, HazardOverlay overlay, SimulationParams params) {
         List<DisasterView> disasters = scenario.disasters().stream()
                 .map(d -> new DisasterView(d.getId(), d.getType().name(), d.getCenterLatitude(), d.getCenterLongitude(),
                         d.getAffectedRadiusMeters(), d.isBlockRoads(), d.getCongestionMultiplier(), d.getDescription()))
@@ -152,82 +173,99 @@ public class EvacuationEngine {
                 .toList();
         List<Long> unsafe = shelterService.getAllShelters().stream()
                 .filter(overlay::isShelterUnsafe).map(Shelter::getId).toList();
-        return new ScenarioSummary(scenario.id(), scenario.name(), scenario.description(), disasters, groups, unsafe,
-                personsPerVehicle, evacuationWindowHours);
+        return new ScenarioSummary(scenario.id(), scenario.name(), scenario.description(), disasters, groups, unsafe, params);
     }
+
+    /** One group's share travelling by one mode. */
+    private record SubGroup(EvacueeGroup group, TravelMode mode, int persons) {}
 
     /** All mutable state of one simulation run. */
     private final class Run {
         final Graph graph = graphService.getGraph();
         final HazardOverlay overlay;
-        final EdgeCost hazardCost;
-        final EdgeCost trafficCost;
-        final Map<Long, Double> vehiclesPerHour = new HashMap<>();
+        final SimulationParams params;
+        final Map<Long, Double> load = new HashMap<>();
+        final EnumMap<TravelMode, EdgeCost> emptyCost = new EnumMap<>(TravelMode.class);
+        final EnumMap<TravelMode, EdgeCost> loadedCost = new EnumMap<>(TravelMode.class);
         final List<SimShelter> shelters = new ArrayList<>();
+        final Map<Long, List<SimShelter>> sheltersByNode = new HashMap<>();
         final List<Alloc> allocs = new ArrayList<>();
         final Map<String, Integer> unreachableByGroup = new HashMap<>();
+        final Map<String, Long> sourceNodes = new HashMap<>();
         int reroutes = 0;
 
-        Run(HazardOverlay overlay) {
+        Run(HazardOverlay overlay, SimulationParams params) {
             this.overlay = overlay;
-            this.hazardCost = overlay.asEdgeCost();
-            this.trafficCost = edge -> {
-                double base = hazardCost.seconds(edge);
-                return Double.isFinite(base)
-                        ? base * edge.congestionFactorFor(vehiclesPerHour.getOrDefault(edge.getId(), 0.0))
-                        : base;
-            };
+            this.params = params;
+            for (TravelMode m : TravelMode.values()) {
+                emptyCost.put(m, CostModel.of(m, overlay));
+                loadedCost.put(m, CostModel.of(m, overlay, load));
+            }
             for (Shelter s : shelterService.getAllShelters()) {
-                boolean unsafe = overlay.isShelterUnsafe(s);
-                shelters.add(new SimShelter(s, s.getRemainingCapacity(), unsafe));
+                int capacity = (int) Math.floor(s.getRemainingCapacity() * params.capacityScale());
+                SimShelter sim = new SimShelter(s, capacity, overlay.isShelterUnsafe(s));
+                shelters.add(sim);
+                if (sim.usable()) sheltersByNode.computeIfAbsent(sim.nodeId, k -> new ArrayList<>()).add(sim);
             }
         }
 
-        List<SimShelter> usable(boolean requireSpace) {
-            return shelters.stream()
-                    .filter(s -> !s.unsafe && s.nodeId >= 0 && s.capacity > 0 && (!requireSpace || s.free() > 0))
-                    .toList();
-        }
-
-        List<EvacueeGroup> priorityOrder(List<EvacueeGroup> groups) {
+        List<SubGroup> split(List<EvacueeGroup> groups) {
             List<EvacueeGroup> ordered = new ArrayList<>(groups);
             ordered.sort(Comparator
                     .comparing((EvacueeGroup g) -> overlay.disastersAt(g.latitude(), g.longitude()).isEmpty())
                     .thenComparing(EvacueeGroup::count, Comparator.reverseOrder())
                     .thenComparing(EvacueeGroup::id));
-            return ordered;
+            List<SubGroup> subs = new ArrayList<>();
+            for (EvacueeGroup g : ordered) {
+                int walk = (int) Math.round(g.count() * params.walkShare());
+                int transit = Math.min(g.count() - walk, (int) Math.round(g.count() * params.transitShare()));
+                int drive = g.count() - walk - transit;
+                for (TravelMode m : MODE_ORDER) {
+                    int n = switch (m) { case WALK -> walk; case TRANSIT -> transit; case DRIVE -> drive; };
+                    if (n > 0) subs.add(new SubGroup(g, m, n));
+                }
+            }
+            return subs;
         }
 
         Long sourceNode(EvacueeGroup g) {
-            GraphService.Snap snap = graphService.snap(g.latitude(), g.longitude());
-            return snap.withinCoverage() ? snap.node().getId() : null;
+            return sourceNodes.computeIfAbsent(g.id(), id -> {
+                GraphService.Snap snap = graphService.snap(g.latitude(), g.longitude());
+                return snap.withinCoverage() ? snap.node().getId() : null;
+            });
         }
 
-        /** Fastest reachable shelter among candidates in a single Dijkstra pass. */
-        Optional<Map.Entry<SimShelter, ShortestPathTree>> nearest(long src, List<SimShelter> candidates, EdgeCost cost) {
+        /** Nearest shelter (by the given cost) among those accepted by {@code filter}, in one early-stopping Dijkstra pass. */
+        Optional<Map.Entry<SimShelter, PathResult>> nearest(long src, EdgeCost cost, java.util.function.Predicate<SimShelter> filter) {
             Set<Long> targets = new HashSet<>();
-            candidates.forEach(s -> targets.add(s.nodeId));
-            ShortestPathTree tree = dijkstra.searchToTargets(graph, cost, src, targets);
-            return candidates.stream()
-                    .filter(s -> tree.reached(s.nodeId))
-                    .min(Comparator.comparingDouble((SimShelter s) -> tree.costTo(s.nodeId)).thenComparingLong(s -> s.id))
-                    .map(s -> Map.entry(s, tree));
+            for (Map.Entry<Long, List<SimShelter>> e : sheltersByNode.entrySet()) {
+                if (e.getValue().stream().anyMatch(filter)) targets.add(e.getKey());
+            }
+            if (targets.isEmpty()) return Optional.empty();
+            ShortestPathTree tree = dijkstra.searchToTargets(graph, cost, src, targets, 1);
+            for (long node : targets) {
+                if (!tree.reached(node)) continue;
+                SimShelter s = sheltersByNode.get(node).stream().filter(filter)
+                        .min(Comparator.comparingLong(x -> x.id)).orElseThrow();
+                return Optional.of(Map.entry(s, tree.pathTo(node)));
+            }
+            return Optional.empty();
         }
 
         void naive(List<EvacueeGroup> groups) {
-            for (EvacueeGroup g : priorityOrder(groups)) {
-                Long src = sourceNode(g);
-                var best = src == null ? Optional.<Map.Entry<SimShelter, ShortestPathTree>>empty()
-                        : nearest(src, usable(false), hazardCost);
+            for (SubGroup sg : split(groups)) {
+                Long src = sourceNode(sg.group());
+                var best = src == null ? Optional.<Map.Entry<SimShelter, PathResult>>empty()
+                        : nearest(src, emptyCost.get(sg.mode()), s -> true);
                 if (best.isEmpty()) {
-                    unreachableByGroup.merge(g.id(), g.count(), Integer::sum);
+                    unreachableByGroup.merge(sg.group().id(), sg.persons(), Integer::sum);
                     continue;
                 }
                 SimShelter shelter = best.get().getKey();
-                PathResult path = best.get().getValue().pathTo(shelter.nodeId);
-                shelter.arrivals += g.count();
-                addTraffic(path, g.count());
-                allocs.add(new Alloc(g, shelter, g.count(), path, path.getTotalTravelTimeSeconds()));
+                PathResult path = best.get().getValue();
+                shelter.arrivals += sg.persons();
+                addLoad(path, sg.mode(), sg.persons());
+                allocs.add(new Alloc(sg, shelter, sg.persons(), path, path.getTotalTravelTimeSeconds()));
             }
             // Shelters admit arrivals in order of arrival time until full.
             evaluateTimes();
@@ -243,28 +281,27 @@ public class EvacuationEngine {
         }
 
         void capacityAware(List<EvacueeGroup> groups) {
-            for (EvacueeGroup g : priorityOrder(groups)) {
-                Long src = sourceNode(g);
+            for (SubGroup sg : split(groups)) {
+                Long src = sourceNode(sg.group());
                 if (src == null) {
-                    unreachableByGroup.merge(g.id(), g.count(), Integer::sum);
+                    unreachableByGroup.merge(sg.group().id(), sg.persons(), Integer::sum);
                     continue;
                 }
-                int remaining = g.count();
+                int remaining = sg.persons();
                 while (remaining > 0) {
-                    List<SimShelter> open = usable(true);
-                    if (open.isEmpty()) break; // all shelters full -> remaining people overflow
-                    var best = nearest(src, open, trafficCost);
+                    var best = nearest(src, loadedCost.get(sg.mode()), s -> s.free() > 0);
                     if (best.isEmpty()) {
-                        unreachableByGroup.merge(g.id(), remaining, Integer::sum);
-                        break;
+                        boolean anySpace = shelters.stream().anyMatch(s -> s.usable() && s.free() > 0);
+                        if (anySpace) unreachableByGroup.merge(sg.group().id(), remaining, Integer::sum);
+                        break; // otherwise every shelter is full: the rest overflow
                     }
                     SimShelter shelter = best.get().getKey();
-                    PathResult path = best.get().getValue().pathTo(shelter.nodeId);
+                    PathResult path = best.get().getValue();
                     int persons = Math.min(remaining, shelter.free());
                     shelter.reserved += persons;
                     shelter.arrivals += persons;
-                    addTraffic(path, persons);
-                    Alloc alloc = new Alloc(g, shelter, persons, path, path.getTotalTravelTimeSeconds());
+                    addLoad(path, sg.mode(), persons);
+                    Alloc alloc = new Alloc(sg, shelter, persons, path, path.getTotalTravelTimeSeconds());
                     alloc.housed = persons;
                     allocs.add(alloc);
                     remaining -= persons;
@@ -274,32 +311,37 @@ public class EvacuationEngine {
             evaluateTimes();
         }
 
-        /** Re-route any allocation whose route became >= 20% slower due to traffic assigned after it. */
+        /** Re-route any allocation whose route became >= 20% slower due to load assigned after it. */
         void rerouteSlowedAllocations() {
             for (Alloc a : allocs) {
-                double now = pathCost(a.path, trafficCost);
+                TravelMode mode = a.sub.mode();
+                EdgeCost cost = loadedCost.get(mode);
+                double now = pathCost(a.path, cost);
                 if (now < a.secondsAtAssignment * (1 + REROUTE_THRESHOLD)) continue;
-                addTraffic(a.path, -a.persons);
+                addLoad(a.path, mode, -a.persons);
                 long src = a.path.getPathNodes().get(0).getId();
-                PathResult alternative = aStar.findShortestPath(graph, trafficCost, src, a.shelter.nodeId);
-                double currentWithoutSelf = pathCost(a.path, trafficCost);
+                PathResult alternative = aStar.findShortestPath(graph, cost, src, a.shelter.nodeId, mode.maxSpeedKmH(graph));
+                double currentWithoutSelf = pathCost(a.path, cost);
                 if (alternative.isPathFound() && alternative.getTotalTravelTimeSeconds() < currentWithoutSelf - 1e-6) {
                     a.path = alternative;
                     a.rerouted = true;
                     reroutes++;
                 }
-                addTraffic(a.path, a.persons);
+                addLoad(a.path, mode, a.persons);
             }
         }
 
         void evaluateTimes() {
-            for (Alloc a : allocs) a.finalSeconds = pathCost(a.path, trafficCost);
+            for (Alloc a : allocs) a.finalSeconds = pathCost(a.path, loadedCost.get(a.sub.mode()));
         }
 
-        void addTraffic(PathResult path, int persons) {
-            double vph = persons / personsPerVehicle / evacuationWindowHours;
+        void addLoad(PathResult path, TravelMode mode, int persons) {
             for (Edge e : path.getPathEdges()) {
-                vehiclesPerHour.merge(e.getId(), vph, (x, y) -> Math.max(0.0, x + y));
+                if (!CostModel.congestible(mode, e)) continue;
+                double perHour = e.getKind() == Edge.Kind.RAIL
+                        ? persons / params.evacuationWindowHours()
+                        : persons / params.personsPerVehicle() / params.evacuationWindowHours();
+                load.merge(e.getId(), perHour, (x, y) -> Math.max(0.0, x + y));
             }
         }
 
@@ -315,38 +357,49 @@ public class EvacuationEngine {
             int unreachable = unreachableByGroup.values().stream().mapToInt(Integer::intValue).sum();
 
             double weightedTime = 0, weightedDist = 0, maxTime = 0;
+            Map<TravelMode, double[]> modeAcc = new EnumMap<>(TravelMode.class); // persons, housed, weighted minutes
+            for (SubGroup sg : split(groups)) modeAcc.computeIfAbsent(sg.mode(), m -> new double[3])[0] += sg.persons();
             for (Alloc a : allocs) {
                 if (a.housed <= 0) continue;
                 double minutes = a.finalSeconds / 60.0;
                 weightedTime += a.housed * minutes;
                 weightedDist += a.housed * a.path.getTotalDistanceMeters() / 1000.0;
                 maxTime = Math.max(maxTime, minutes);
+                double[] acc = modeAcc.computeIfAbsent(a.sub.mode(), m -> new double[3]);
+                acc[1] += a.housed;
+                acc[2] += a.housed * minutes;
             }
-            int usableCapacity = usable(false).stream().mapToInt(s -> s.capacity).sum();
+            int usableCapacity = shelters.stream().filter(SimShelter::usable).mapToInt(s -> s.capacity).sum();
 
-            double congestedKm = 0;
-            for (Map.Entry<Long, Double> entry : vehiclesPerHour.entrySet()) {
+            double congestedKm = 0, crowdedRailKm = 0;
+            for (Map.Entry<Long, Double> entry : load.entrySet()) {
                 Edge e = graph.getEdge(entry.getKey());
-                if (e.congestionFactorFor(entry.getValue()) >= 1.7) congestedKm += e.getDistanceMeters() / 1000.0;
+                if (e.congestionFactorFor(entry.getValue()) < 1.7) continue;
+                if (e.getKind() == Edge.Kind.RAIL) crowdedRailKm += e.getDistanceMeters() / 1000.0;
+                else congestedKm += e.getDistanceMeters() / 1000.0;
             }
 
             List<ShelterLoad> loads = new ArrayList<>();
             int overCapacity = 0;
+            Map<SimShelter, Integer> housedByShelter = new HashMap<>();
+            for (Alloc a : allocs) housedByShelter.merge(a.shelter, a.housed, Integer::sum);
             for (SimShelter s : shelters) {
-                int shelterHoused = allocs.stream().filter(a -> a.shelter == s).mapToInt(a -> a.housed).sum();
                 if (s.arrivals > s.capacity) overCapacity++;
-                loads.add(new ShelterLoad(s.id, s.name, s.capacity, s.arrivals, shelterHoused, s.unsafe));
+                if (s.arrivals > 0 || s.unsafe) {
+                    loads.add(new ShelterLoad(s.id, s.name, s.capacity, s.arrivals, housedByShelter.getOrDefault(s, 0), s.unsafe));
+                }
             }
 
             List<Allocation> allocations = allocs.stream()
-                    .map(a -> new Allocation(a.group.id(), a.group.name(), a.shelter.id, a.shelter.name, a.persons, a.housed,
-                            round(a.finalSeconds / 60.0), round(a.path.getTotalDistanceMeters() / 1000.0), a.rerouted,
+                    .map(a -> new Allocation(a.sub.group().id(), a.sub.group().name(), a.sub.mode().name(), a.shelter.id,
+                            a.shelter.name, a.persons, a.housed, round(a.finalSeconds / 60.0),
+                            round(a.path.getTotalDistanceMeters() / 1000.0), a.rerouted,
                             a.path.getPathNodes().stream().map(n -> new double[]{n.getLatitude(), n.getLongitude()}).toList()))
                     .toList();
 
             List<GroupOutcome> outcomes = new ArrayList<>();
             for (EvacueeGroup g : groups) {
-                int groupHoused = allocs.stream().filter(a -> a.group.id().equals(g.id())).mapToInt(a -> a.housed).sum();
+                int groupHoused = allocs.stream().filter(a -> a.sub.group().id().equals(g.id())).mapToInt(a -> a.housed).sum();
                 int overflow = g.count() - groupHoused;
                 String status = overflow == 0 ? "EVACUATED"
                         : groupHoused > 0 ? "PARTIAL"
@@ -354,11 +407,20 @@ public class EvacuationEngine {
                 outcomes.add(new GroupOutcome(g.id(), g.name(), g.count(), groupHoused, overflow, status));
             }
 
+            Map<String, ModeStats> byMode = new LinkedHashMap<>();
+            for (TravelMode m : MODE_ORDER) {
+                double[] acc = modeAcc.get(m);
+                if (acc == null) continue;
+                byMode.put(m.name(), new ModeStats((int) acc[0], (int) acc[1], acc[1] > 0 ? round(acc[2] / acc[1]) : 0));
+            }
+
             return new StrategyMetrics(strategy, total, housed, total - housed, unreachable,
+                    total > 0 ? round(100.0 * housed / total) : 0,
                     housed > 0 ? round(weightedTime / housed) : 0, round(maxTime),
                     housed > 0 ? round(weightedDist / housed) : 0,
                     usableCapacity > 0 ? round(100.0 * housed / usableCapacity) : 0,
-                    overCapacity, round(congestedKm), reroutes, execMs, loads, allocations, outcomes);
+                    overCapacity, round(congestedKm), round(crowdedRailKm), reroutes, execMs,
+                    byMode, loads, allocations, outcomes);
         }
     }
 
@@ -379,11 +441,12 @@ public class EvacuationEngine {
             this.unsafe = unsafe;
         }
 
+        boolean usable() { return !unsafe && nodeId >= 0 && capacity > 0; }
         int free() { return capacity - reserved; }
     }
 
     private static final class Alloc {
-        final EvacueeGroup group;
+        final SubGroup sub;
         final SimShelter shelter;
         final int persons;
         final double secondsAtAssignment;
@@ -392,8 +455,8 @@ public class EvacuationEngine {
         double finalSeconds;
         boolean rerouted;
 
-        Alloc(EvacueeGroup group, SimShelter shelter, int persons, PathResult path, double secondsAtAssignment) {
-            this.group = group;
+        Alloc(SubGroup sub, SimShelter shelter, int persons, PathResult path, double secondsAtAssignment) {
+            this.sub = sub;
             this.shelter = shelter;
             this.persons = persons;
             this.path = path;
@@ -405,8 +468,8 @@ public class EvacuationEngine {
 
     // ------------------------------------------------------------------ presets
 
-    private static List<Scenario> buildPresets() {
-        return List.of(
+    private static List<Scenario> buildPresets(FloodHotspotService hotspots) {
+        List<Scenario> list = new ArrayList<>(List.of(
             new Scenario("sion_flood", "Sion Monsoon Heavy Flood",
                 "Severe urban flooding at Sion Circle blocking the Sion interchange. Evacuating Sion Koliwada, Kurla West and Dadar East.",
                 List.of(event("sim-sion-flood", DisasterType.FLOOD, 19.0390, 72.8619, 1200, true, 3.0, "Monsoon flooding at Sion Circle")),
@@ -441,7 +504,19 @@ public class EvacuationEngine {
                         new EvacueeGroup("grp-2", "Vile Parle Residents", 19.0990, 72.8440, 12000, "Ward K-East"),
                         new EvacueeGroup("grp-3", "Malad West Residents", 19.1860, 72.8485, 15000, "Ward P-North"),
                         new EvacueeGroup("grp-4", "Goregaon West Residents", 19.1663, 72.8454, 25000, "Ward P-South")))
-        );
+        ));
+        List<DisasterEvent> monsoon = hotspots.asFloodEvents("sim-");
+        if (!monsoon.isEmpty()) {
+            List<EvacueeGroup> residents = new ArrayList<>();
+            int i = 1;
+            for (FloodHotspotService.Hotspot h : hotspots.getHotspots()) {
+                residents.add(new EvacueeGroup("grp-" + i++, "Residents near " + h.name(), h.lat(), h.lon(), 3000, ""));
+            }
+            list.add(new Scenario("monsoon_hotspots", "Monsoon: all chronic flooding spots",
+                    "Heavy monsoon day: every chronic water-logging spot floods at once and low-lying roads nearby are slowed. "
+                        + "3,000 residents evacuate from around each spot.", monsoon, residents));
+        }
+        return List.copyOf(list);
     }
 
     private static DisasterEvent event(String id, DisasterType type, double lat, double lon, double radius,

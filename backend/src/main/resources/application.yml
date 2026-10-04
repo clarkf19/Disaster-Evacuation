@@ -37,11 +37,19 @@ graph:
   nodes-resource: ${GRAPH_NODES_RESOURCE:classpath:data/mumbai_nodes.csv}
   edges-resource: ${GRAPH_EDGES_RESOURCE:classpath:data/mumbai_edges.csv}
   shelters-resource: ${SHELTERS_RESOURCE:classpath:data/shelters.json}
+  stations-resource: ${RAIL_STATIONS_RESOURCE:classpath:data/rail_stations.csv}
+  rail-links-resource: ${RAIL_LINKS_RESOURCE:classpath:data/rail_links.csv}
+  hotspots-resource: ${FLOOD_HOTSPOTS_RESOURCE:classpath:data/flood_hotspots.json}
 
-# Evacuation traffic model: persons -> vehicles/hour on each road
+# Evacuation model defaults (each can be overridden per simulation request)
+#  - drivers load roads: persons / persons-per-vehicle / window-hours -> vehicles/hour
+#  - train riders load rail links: persons / window-hours -> persons/hour
+#  - walk-share + transit-share of each group walk / take the train; the rest drive
 evacuation:
   persons-per-vehicle: ${EVAC_PERSONS_PER_VEHICLE:4}
   window-hours: ${EVAC_WINDOW_HOURS:3}
+  walk-share: ${EVAC_WALK_SHARE:0.5}
+  transit-share: ${EVAC_TRANSIT_SHARE:0.3}
 
 # Operator token protecting disaster / shelter mutations. Leave empty only for local development.
 security:

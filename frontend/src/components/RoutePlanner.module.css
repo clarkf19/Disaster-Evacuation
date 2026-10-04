@@ -477,3 +477,30 @@
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+.modeSwitch {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+.modeOption {
+  flex: 1;
+  padding: 7px 4px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.modeOptionActive {
+  background: #ffffff;
+  color: var(--google-blue);
+  box-shadow: var(--shadow-sm);
+}

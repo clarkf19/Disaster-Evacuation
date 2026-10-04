@@ -135,6 +135,38 @@
   padding: 6px 10px;
 }
 
+.searchRow {
+  margin: 0 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.search {
+  padding: 8px 10px;
+  border: 1.5px solid var(--panel-border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.sortHint {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+}
+
+.moreBtn {
+  padding: 8px;
+  border: 1.5px dashed var(--panel-border);
+  border-radius: 8px;
+  background: #ffffff;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
 .demoBanner {
   margin: 0 16px 12px;
   padding: 10px 12px;

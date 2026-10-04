@@ -133,6 +133,51 @@ class ApiTest {
     }
 
     @Test
+    void walkingAndTrainRoutesReturnAnItinerary() throws Exception {
+        // Andheri -> Dadar: far enough that the train beats walking.
+        String walk = "{\"fromLat\":19.1197,\"fromLon\":72.8464,\"toLat\":19.0178,\"toLon\":72.8478,\"mode\":\"WALK\"}";
+        mvc.perform(post("/api/live-route").contentType(MediaType.APPLICATION_JSON).content(walk))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pathFound").value(true))
+                .andExpect(jsonPath("$.travelMode").value("WALK"))
+                .andExpect(jsonPath("$.legs[0].type").value("WALK"));
+
+        String train = walk.replace("WALK", "TRANSIT");
+        String json = mvc.perform(post("/api/live-route").contentType(MediaType.APPLICATION_JSON).content(train))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.travelMode").value("TRANSIT"))
+                .andReturn().getResponse().getContentAsString();
+        JsonNode legs = objectMapper.readTree(json).path("legs");
+        boolean usesTrain = false;
+        for (JsonNode leg : legs) usesTrain |= "TRAIN".equals(leg.path("type").asText());
+        assertTrue(usesTrain, "Andheri to Dadar should use the suburban train: " + legs);
+    }
+
+    @Test
+    void monsoonHotspotsCanBeActivatedAndListed() throws Exception {
+        mvc.perform(get("/api/flood-hotspots")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.hotspots.length()").value(org.hamcrest.Matchers.greaterThan(5)));
+        mvc.perform(post("/api/disasters/monsoon")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/disasters/monsoon").header("X-Admin-Token", "test-token"))
+                .andExpect(status().isCreated());
+        mvc.perform(get("/api/graph/stats")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lowLyingEdgesSlowed").value(org.hamcrest.Matchers.greaterThan(0)));
+        mvc.perform(get("/api/rail/stations")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(org.hamcrest.Matchers.greaterThan(20)));
+    }
+
+    @Test
+    void evaluationEndpointsValidateInput() throws Exception {
+        mvc.perform(post("/api/evaluation/monte-carlo").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"scenarioId\":\"sion_flood\",\"runs\":1000}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/evaluation/monte-carlo").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"scenarioId\":\"sion_flood\",\"runs\":3}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.metrics.CAPACITY_AWARE.housedPercent.n").value(3));
+    }
+
+    @Test
     void configAndHealthAreExposed() throws Exception {
         mvc.perform(get("/api/config")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.operatorTokenRequired").value(true))

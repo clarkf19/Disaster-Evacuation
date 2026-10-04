@@ -174,6 +174,77 @@
   font-size: 0.72rem;
 }
 
+.subheading {
+  margin-top: 10px;
+}
+
+.inlineInputs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inlineInputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex: 1;
+  min-width: 80px;
+}
+
+.inlineInputs input, .inlineInputs select {
+  padding: 6px 8px;
+  border: 1.5px solid var(--panel-border);
+  border-radius: 7px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+}
+
+.chart {
+  margin: 0;
+}
+
+.chart svg {
+  width: 100%;
+  height: auto;
+}
+
+.chart figcaption {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.assumptions {
+  font-size: 0.76rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: var(--bg-light);
+}
+
+.assumptions summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.sliderRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--text-secondary);
+}
+
+.sliderRow input {
+  width: 100%;
+}
+
 .status {
   font-size: 0.66rem;
   font-weight: 800;

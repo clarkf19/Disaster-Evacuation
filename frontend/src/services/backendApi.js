@@ -65,11 +65,23 @@ export const listDisasters     = () => request('/disasters');
 export const addDisaster       = (data) => request('/disasters', { method: 'POST', body: data, operator: true });
 export const removeDisaster    = (id) => request(`/disasters/${encodeURIComponent(id)}`, { method: 'DELETE', operator: true });
 export const clearAllDisasters = () => request('/disasters', { method: 'DELETE', operator: true });
+export const activateMonsoonHotspots = () => request('/disasters/monsoon', { method: 'POST', operator: true });
+
+// --- Map layers ---
+export const getFloodHotspots = () => request('/flood-hotspots');
+export const getRailStations  = () => request('/rail/stations');
 
 // --- Evacuation simulation (sandboxed — never changes live state) ---
 export const getPresetScenarios = () => request('/evacuation/scenarios');
-export const compareStrategies  = (scenarioId) => request('/evacuation/compare', { method: 'POST', body: { scenarioId } });
+export const getSimulationDefaults = () => request('/evacuation/defaults');
+/** params: { personsPerVehicle, evacuationWindowHours, capacityScale, walkShare, transitShare } (all optional) */
+export const compareStrategies  = (scenarioId, params = {}) =>
+  request('/evacuation/compare', { method: 'POST', body: { scenarioId, ...params } });
 export const benchmarkAlgorithms = () => request('/benchmark/algorithms');
+
+// --- Statistical evaluation ---
+export const runMonteCarlo  = (body) => request('/evaluation/monte-carlo', { method: 'POST', body });
+export const runSensitivity = (body) => request('/evaluation/sensitivity', { method: 'POST', body });
 
 // --- Emergency chatbot ---
 export const sendChatMessage = (message, userLat = null, userLon = null) =>
@@ -86,7 +98,7 @@ export const getEmergencyHospitals = (disasterType = '', region = '') => {
 };
 
 // --- Routing & geocoding (all proxied by the backend) ---
-export const fetchLiveRoute = (fromLat, fromLon, toLat, toLon) =>
-  request('/live-route', { method: 'POST', body: { fromLat, fromLon, toLat, toLon } });
+export const fetchLiveRoute = (fromLat, fromLon, toLat, toLon, mode = 'DRIVE') =>
+  request('/live-route', { method: 'POST', body: { fromLat, fromLon, toLat, toLon, mode } });
 export const fetchPlaceName = (lat, lon) => request(`/geocode?lat=${lat}&lon=${lon}`);
 export const fetchPlaceSuggestions = (q) => request(`/search?q=${encodeURIComponent(q)}`);

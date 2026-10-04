@@ -3,6 +3,7 @@ package com.mumbai.evacuation.controller;
 import com.mumbai.evacuation.disaster.DisasterEvent;
 import com.mumbai.evacuation.dto.DisasterRequest;
 import com.mumbai.evacuation.dto.EvacuationBenchmarkResult.DisasterView;
+import com.mumbai.evacuation.service.FloodHotspotService;
 import com.mumbai.evacuation.service.GraphService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -22,9 +23,11 @@ import java.util.NoSuchElementException;
 public class DisasterController {
 
     private final GraphService graphService;
+    private final FloodHotspotService hotspotService;
 
-    public DisasterController(GraphService graphService) {
+    public DisasterController(GraphService graphService, FloodHotspotService hotspotService) {
         this.graphService = graphService;
+        this.hotspotService = hotspotService;
     }
 
     @GetMapping
@@ -36,6 +39,15 @@ public class DisasterController {
     @ResponseStatus(HttpStatus.CREATED)
     public DisasterView addDisaster(@Valid @RequestBody DisasterRequest request) {
         return view(graphService.addDisaster(request));
+    }
+
+    /** POST /api/disasters/monsoon — activate every chronic flooding hotspot as a live flood zone. */
+    @PostMapping("/monsoon")
+    @ResponseStatus(HttpStatus.CREATED)
+    public List<DisasterView> activateMonsoonHotspots() {
+        List<DisasterEvent> events = hotspotService.asFloodEvents("monsoon-");
+        graphService.addDisasters(events);
+        return events.stream().map(DisasterController::view).toList();
     }
 
     @DeleteMapping("/{id}")

@@ -42,8 +42,10 @@ public class ShelterService {
                 double lat = s.path("lat").asDouble();
                 double lon = s.path("lon").asDouble();
                 Node nearest = graph.findNearestNode(lat, lon);
+                double elevation = s.path("elevationM").isNumber() ? s.path("elevationM").asDouble() : Double.NaN;
                 Shelter shelter = new Shelter(s.path("id").asLong(), s.path("name").asText(), lat, lon,
-                        nearest != null ? nearest.getId() : -1, s.path("capacity").asInt(), s.path("floodProne").asBoolean(false));
+                        nearest != null ? nearest.getId() : -1, s.path("capacity").asInt(),
+                        s.path("floodProne").asBoolean(false), elevation, s.path("kind").asText("school"));
                 loaded.put(shelter.getId(), shelter);
             }
             this.shelters = Collections.unmodifiableMap(loaded);

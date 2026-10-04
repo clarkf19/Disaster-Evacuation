@@ -98,7 +98,9 @@ public class ShelterController {
         m.put("currentOccupancy", s.getCurrentOccupancy());
         m.put("remainingCapacity", s.getRemainingCapacity());
         m.put("isFull", s.isFull());
+        m.put("kind", s.getKind());
         m.put("floodProne", s.isFloodProne());
+        m.put("elevationM", Double.isNaN(s.getElevationM()) ? null : s.getElevationM());
         m.put("unsafe", overlay.isShelterUnsafe(s));
         return m;
     }

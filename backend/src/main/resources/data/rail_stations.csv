@@ -1,0 +1,68 @@
+id,name,latitude,longitude,lines,elevation_m
+0,Mumbai CSMT,18.9404925,72.8357856,Central Line;Harbour Line,14.6
+1,Masjid,18.9522949,72.8381771,Central Line;Harbour Line,6.3
+2,Sandhurst Road,18.9609243,72.8393719,Central Line;Harbour Line,11.7
+3,Dockyard Road,18.9674767,72.8445477,Harbour Line,12.3
+4,Reay Road,18.9775506,72.8441011,Harbour Line,5.5
+5,Cotton Green,18.9871866,72.8438965,Harbour Line,9.8
+6,Sewri,18.9987796,72.8544218,Harbour Line,8.1
+7,Wadala Bridge,19.0174849,72.8593168,Harbour Line,5.4
+8,Guru Tegh Bahadur Nagar,19.0380048,72.8643455,Harbour Line,6.5
+9,Chuna Bhatti,19.0517703,72.8690974,Harbour Line,7.3
+10,Kurla,19.0652797,72.8793805,Central Line;Harbour Line,9.5
+11,Chembur,19.0626319,72.9011399,Harbour Line,10.6
+12,Tilak Nagar,19.0657855,72.8904702,Harbour Line,6.1
+13,Govandi,19.0553688,72.9150702,Harbour Line,8.9
+14,Mankhurd,19.0482086,72.9317136,Harbour Line,7.8
+15,Seawoods,19.0218192,73.0191588,Harbour Line;Nerul–Uran line;Trans-Harbour Line,8.5
+16,CBD Belapur,19.0190075,73.0391304,Harbour Line;Nerul–Uran line;Trans-Harbour Line,13.4
+17,Kharghar,19.0258415,73.0593001,Harbour Line;Trans-Harbour Line,14.4
+18,Thane,19.186483,72.9757664,Central Line;Trans-Harbour Line,11.6
+19,Nhava Sheva,18.898061,72.9877967,Nerul–Uran line,2.8
+20,Ranjanpada,18.9092584,73.0158486,Nerul–Uran line,2.2
+21,King's Circle,19.0316822,72.8577375,Harbour Line,9.6
+22,Mahim Junction,19.0406634,72.8466038,Harbour Line;Western Line,5.4
+23,Bandra,19.0549792,72.8402203,Harbour Line;Western Line,10.4
+24,Khar Road,19.0682411,72.8400412,Harbour Line;Western Line,7.3
+25,Santa Cruz,19.0815223,72.8417565,Harbour Line;Western Line,9.7
+26,Vile Parle,19.0999098,72.8440038,Harbour Line;Western Line,12.3
+27,Andheri,19.1196976,72.8464205,Harbour Line;Western Line,13.8
+28,Jogeshwari (Harbour Line),19.1411537,72.8494209,Harbour Line,11.6
+29,Ram Mandir,19.151023,72.8501467,Harbour Line;Western Line,10.9
+30,Goregaon,19.1648688,72.8495492,Harbour Line;Western Line,13.9
+31,Diva Junction,19.1887564,73.0414169,Central Line;Vasai Road-Diva Line,6.6
+32,Bhivandi Road,19.2688735,73.0463121,Vasai Road-Diva Line,24.7
+33,Kharbhav,19.298321,72.9844677,Vasai Road-Diva Line,6.3
+34,Dativali,19.1871047,73.0591806,Vasai Road-Diva Line,8.4
+35,Mumbra,19.1899425,73.0230752,Central Line,8.0
+36,Kalva,19.1952243,72.9963331,Central Line,11.4
+37,Mulund,19.1721366,72.9566971,Central Line,10.4
+38,Nahur,19.1546402,72.9466525,Central Line,6.3
+39,Bhandup,19.142757,72.9376543,Central Line,7.3
+40,Kanjur Marg,19.1286526,72.9280394,Central Line,7.0
+41,Vikhroli,19.1114795,72.928021,Central Line,11.9
+42,Ghatkopar,19.0856928,72.9083668,Central Line,12.1
+43,Vidyavihar,19.0795422,72.8971169,Central Line,7.3
+44,Sion,19.0465213,72.8632834,Central Line,12.5
+45,Matunga,19.0274356,72.8501467,Central Line,6.0
+46,Dadar,19.0173761,72.8430265,Central Line,7.1
+47,Parel,19.0094817,72.8376614,Central Line,5.8
+48,Currey Road,18.9937486,72.8328556,Central Line,6.9
+49,Chinchpokli,18.9871984,72.8326716,Central Line,6.5
+50,Byculla,18.9766219,72.8327936,Central Line,10.6
+51,Mira Road,19.2816975,72.8560676,Western Line,7.0
+52,Dahisar,19.2493572,72.8596302,Western Line,13.6
+53,Borivali,19.229068,72.8573628,Western Line,16.4
+54,Kandivali,19.2041136,72.8517376,Western Line,15.3
+55,Malad,19.1867193,72.8485884,Western Line,19.7
+56,Jogeshwari (Western Line),19.1361144,72.848936,Western Line,13.6
+57,Matunga Road,19.0278149,72.8466813,Western Line,4.7
+58,Dadar,19.0192269,72.8428479,Western Line,10.3
+59,Prabhadevi,19.0074717,72.8358965,Western Line,7.7
+60,Lower Parel,18.99568,72.8302756,Western Line,5.4
+61,Mahalaxmi,18.9825203,72.8242196,Western Line,8.0
+62,Mumbai Central,18.9695855,72.8193152,Western Line,17.1
+63,Grant Road,18.9633549,72.8158261,Western Line,4.7
+64,Charni Road,18.9518437,72.8182401,Western Line,7.1
+65,Marine Lines,18.945764,72.8237193,Western Line,5.3
+66,Churchgate,18.9354797,72.8271741,Western Line,11.8

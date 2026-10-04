@@ -38,6 +38,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         LIMITS.put("/api/evacuation/simulate", 20);
         LIMITS.put("/api/evacuation/compare", 20);
         LIMITS.put("/api/benchmark", 6);
+        LIMITS.put("/api/evaluation", 6);
     }
 
     private final boolean enabled;

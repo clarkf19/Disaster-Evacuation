@@ -27,7 +27,13 @@ export default function App() {
   const [shelters, setShelters] = useState([]);
   const [disasters, setDisasters] = useState([]);
 
+  // Map layers
+  const [hotspots, setHotspots] = useState([]);
+  const [stations, setStations] = useState([]);
+  const [layers, setLayers] = useState({ hotspots: true, stations: false });
+
   // Route state
+  const [travelMode, setTravelMode] = useState('DRIVE'); // DRIVE | WALK | TRANSIT
   const [routeResult, setRouteResult] = useState(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState('');
@@ -53,9 +59,15 @@ export default function App() {
       setShelters(shelterData || []);
       setDisasters(disasterData || []);
       setOnline(true);
+      // Station open/closed status depends on live hazards; failures here are non-critical.
+      API.getRailStations().then(setStations).catch(() => {});
     } catch {
       setOnline(false);
     }
+  }, []);
+
+  useEffect(() => {
+    API.getFloodHotspots().then(d => setHotspots(d.hotspots || [])).catch(() => {});
   }, []);
 
   // Poll fast while demo mode is moving people (hazards active, or shelters still emptying).
@@ -72,12 +84,12 @@ export default function App() {
     return () => clearInterval(id);
   }, [refreshLiveData, pollMs]);
 
-  const computeRoute = useCallback(async (from, to) => {
+  const computeRoute = useCallback(async (from, to, mode) => {
     if (!from || !to) return;
     setRouteError('');
     setRouteLoading(true);
     try {
-      setRouteResult(await calcLiveRoute(from.lat, from.lon, to.lat, to.lon));
+      setRouteResult(await calcLiveRoute(from.lat, from.lon, to.lat, to.lon, mode));
     } catch (e) {
       setRouteError(e.message);
       setRouteResult(null);
@@ -94,7 +106,7 @@ export default function App() {
     lastSignature.current = disasterSignature;
     if (routeResult && source && dest) {
       showNotice('Active hazards changed — route recalculated.', 'info');
-      computeRoute(source, dest);
+      computeRoute(source, dest, travelMode);
     }
     // routeResult intentionally omitted: only hazard changes should trigger this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -241,7 +253,12 @@ export default function App() {
               source={source}
               dest={dest}
               onClear={handleClearRoute}
-              onCompute={() => computeRoute(source, dest)}
+              onCompute={() => computeRoute(source, dest, travelMode)}
+              travelMode={travelMode}
+              onTravelModeChange={(m) => {
+                setTravelMode(m);
+                if (routeResult && source && dest) computeRoute(source, dest, m);
+              }}
               loading={routeLoading}
               error={routeError}
               onSourceSet={handleSourceSet}
@@ -262,6 +279,7 @@ export default function App() {
           {activeTab === 'shelters' && (
             <ShelterPanel
               shelters={shelters}
+              origin={source}
               dataVerified={config?.shelterDataVerified}
               demoMode={config?.demoMode}
               hazardsActive={disasters.length > 0}
@@ -296,6 +314,10 @@ export default function App() {
           disasters={disasters}
           simulation={activeTab === 'command' ? simulation : null}
           coverageBounds={config?.coverageBounds}
+          hotspots={hotspots}
+          stations={stations}
+          layers={layers}
+          onToggleLayer={(key) => setLayers(l => ({ ...l, [key]: !l[key] }))}
           onSelectShelter={handleSelectShelter}
         />
         {clickMode && clickMode !== 'disaster' && (

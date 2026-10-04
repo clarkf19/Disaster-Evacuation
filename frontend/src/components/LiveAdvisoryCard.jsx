@@ -16,6 +16,8 @@ const SOURCE_LABEL = {
   ROAD_GRAPH: 'Hazard-aware road graph',
 };
 
+const MODE_LABEL = { DRIVE: 'Drive', WALK: 'Walk', TRANSIT: 'Train + walk' };
+
 /** Route status, advisory, warnings and key metrics for the computed route. */
 export default function LiveAdvisoryCard({ result }) {
   if (!result) return null;
@@ -26,7 +28,9 @@ export default function LiveAdvisoryCard({ result }) {
       <div className={styles.header}>
         <span className={styles.dot} style={{ backgroundColor: cfg.dot }} />
         <span className={styles.badge}>{cfg.label}</span>
-        <span className={styles.live}>{SOURCE_LABEL[result.source] || result.source}</span>
+        <span className={styles.live}>
+          {result.source === 'TOMTOM_LIVE' ? SOURCE_LABEL.TOMTOM_LIVE : `${MODE_LABEL[result.mode] || ''} · road graph`}
+        </span>
       </div>
 
       {result.advisoryMessage && <p className={styles.message}>{result.advisoryMessage}</p>}
@@ -35,6 +39,12 @@ export default function LiveAdvisoryCard({ result }) {
         <ul className={styles.warnings}>
           {result.warnings.map((w, i) => <li key={i}>⚠️ {w}</li>)}
         </ul>
+      )}
+
+      {result.found && result.legs?.length > 0 && result.mode !== 'DRIVE' && (
+        <ol className={styles.legs} aria-label="Itinerary">
+          {result.legs.map((leg, i) => <LegItem key={i} leg={leg} />)}
+        </ol>
       )}
 
       {result.found && (
@@ -46,7 +56,11 @@ export default function LiveAdvisoryCard({ result }) {
               <MetricRow label={result.source === 'TOMTOM_LIVE' ? 'Traffic Delay' : 'Hazard Delay'}
                          value={`+${result.delayMinutes} min`} warn />
             )}
-            <MetricRow label="Free-Flow Time" value={`${result.freeFlowMinutes} min`} muted />
+            <MetricRow label={result.mode === 'DRIVE' ? 'Free-Flow Time' : 'Time Without Hazards'}
+                       value={`${result.freeFlowMinutes} min`} muted />
+            {result.lowestElevationM != null && (
+              <MetricRow label="Lowest Point on Route" value={`${Math.round(result.lowestElevationM)} m`} muted />
+            )}
           </div>
 
           <div className={styles.legend}>
@@ -54,10 +68,36 @@ export default function LiveAdvisoryCard({ result }) {
             <LegendItem color="#fbbc04" label="Slow" />
             <LegendItem color="#f97316" label="Moderate" />
             <LegendItem color="#ea4335" label="Heavy / exiting zone" />
+            {result.mode === 'TRANSIT' && <LegendItem color="#7c3aed" label="Train" />}
           </div>
         </>
       )}
     </div>
+  );
+}
+
+function LegItem({ leg }) {
+  const minutes = `${Math.max(1, Math.round(leg.minutes))} min`;
+  let icon, text;
+  if (leg.type === 'TRAIN') {
+    icon = '🚆';
+    text = <><b>{leg.line}</b> from {leg.fromName} to <b>{leg.toName}</b> ({leg.stops} stop{leg.stops === 1 ? '' : 's'})</>;
+  } else if (leg.type === 'WAIT') {
+    icon = '⏱️';
+    text = <>Wait for a train at <b>{leg.fromName}</b></>;
+  } else if (leg.type === 'DRIVE') {
+    icon = '🚗';
+    text = <>Drive {leg.distanceKm} km</>;
+  } else {
+    icon = '🚶';
+    text = <>Walk {leg.distanceKm} km</>;
+  }
+  return (
+    <li>
+      <span aria-hidden="true">{icon}</span>
+      <span>{text}</span>
+      <span>{minutes}</span>
+    </li>
   );
 }
 

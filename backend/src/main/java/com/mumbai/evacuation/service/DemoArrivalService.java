@@ -144,8 +144,9 @@ public class DemoArrivalService {
                     .filter(s -> s.getNearestNodeId() >= 0 && !overlay.isShelterUnsafe(s)).toList();
             Set<Long> targets = new HashSet<>();
             candidates.forEach(s -> targets.add(s.getNearestNodeId()));
+            // The 40 nearest shelters are plenty to spill over into.
             ShortestPathTree tree = dijkstra.searchToTargets(graphService.getGraph(), overlay.asEdgeCost(),
-                    snap.node().getId(), targets);
+                    snap.node().getId(), targets, 40);
             return candidates.stream()
                     .filter(s -> tree.reached(s.getNearestNodeId()))
                     .sorted(Comparator.comparingDouble(s -> tree.costTo(s.getNearestNodeId())))

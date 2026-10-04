@@ -65,3 +65,5 @@ All third-party calls (TomTom, Photon, Nominatim, Gemini) go through the backend
 - **Render free tier** sleeps after 15 minutes of inactivity, and the first request can take ~1 minute. The UI shows "Offline" until the backend responds.
 - **Rate limits** are per client IP (`X-Forwarded-For`). Set `RATE_LIMIT_ENABLED=false` only for load testing.
 - Live hazards and shelter occupancy are stored in memory and reset when the service restarts.
+- **Memory:** the full network (≈95k road nodes, 216k segments, residential streets included) runs the whole API test suite within a 300 MB heap, so it fits the free 512 MB instance (the Dockerfile caps the heap at 75 % of the container). If you run out of memory anyway, rebuild a lighter graph with `python scripts/build_datasets.py --no-residential` and redeploy.
+- **Evaluation endpoints** are CPU-heavy (each Monte Carlo run is two full simulations). They are rate-limited to 6 requests/minute per IP.

@@ -28,6 +28,7 @@ graph_cache/
 *.graphml
 *.pickle
 osmnx_cache/
+scripts/.cache/
 
 
 # ── Java / Spring Boot / Maven ──────────────────────────────

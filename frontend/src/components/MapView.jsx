@@ -38,27 +38,25 @@ function makePinIcon(color) {
 const sourceIcon = makePinIcon('#1a73e8');
 const destIcon   = makePinIcon('#ea4335');
 
-const shelterIconCache = new Map();
-function shelterIcon(pct, unsafe) {
-  const key = unsafe ? 'unsafe' : String(pct);
-  if (!shelterIconCache.has(key)) {
-    const color = unsafe ? '#94a3b8' : pct >= 90 ? '#ea4335' : pct >= 70 ? '#f97316' : '#34a853';
-    const label = unsafe ? '⚠️' : `${pct}%`;
-    shelterIconCache.set(key, L.divIcon({
-      className: '',
-      html: `
-        <div style="width:34px;height:34px;background:white;border:3px solid ${color};border-radius:50%;
-                    display:flex;align-items:center;justify-content:center;font-size:15px;
-                    box-shadow:0 2px 8px rgba(0,0,0,0.2);position:relative;${unsafe ? 'opacity:0.7;' : ''}">
-          ⛺
-          <div style="position:absolute;bottom:-9px;left:50%;transform:translateX(-50%);background:${color};
-                      color:white;font-size:9px;font-weight:800;padding:1px 4px;border-radius:4px;white-space:nowrap">${label}</div>
-        </div>`,
-      iconSize: [34, 34],
-      iconAnchor: [17, 17],
-    }));
+function shelterColor(pct, unsafe) {
+  return unsafe ? '#94a3b8' : pct >= 90 ? '#ea4335' : pct >= 70 ? '#f97316' : '#34a853';
+}
+
+/** Marker radius grows with capacity (shelters range from ~150 to ~3,000 places). */
+function shelterRadius(capacity) {
+  return Math.max(5, Math.min(11, 4 + Math.sqrt(capacity) / 8));
+}
+
+/** Route line style by segment kind: driving solid, walking dotted, train purple dashed. */
+function segmentStyle(seg) {
+  if (seg.kind === 'rail') {
+    return { color: '#7c3aed', weight: 6, opacity: 0.9, dashArray: '12 8' };
   }
-  return shelterIconCache.get(key);
+  const color = CONGESTION_COLORS[seg.congestion] || '#1a73e8';
+  if (seg.kind === 'walk') {
+    return { color, weight: 5, opacity: 0.95, dashArray: '1 9', lineCap: 'round' };
+  }
+  return { color, weight: CONGESTION_WEIGHT[seg.congestion] || 6, opacity: 0.92, lineCap: 'round', lineJoin: 'round' };
 }
 
 const DISASTER_EMOJI = {
@@ -181,6 +179,26 @@ function SimulationLayer({ simulation }) {
   );
 }
 
+function LayerToggles({ layers, onToggleLayer, hasHotspots, hasStations }) {
+  if (!onToggleLayer || (!hasHotspots && !hasStations)) return null;
+  return (
+    <div className="map-layer-toggles" role="group" aria-label="Map layers">
+      {hasHotspots && (
+        <label>
+          <input type="checkbox" checked={layers.hotspots} onChange={() => onToggleLayer('hotspots')} />
+          💧 Monsoon flooding spots
+        </label>
+      )}
+      {hasStations && (
+        <label>
+          <input type="checkbox" checked={layers.stations} onChange={() => onToggleLayer('stations')} />
+          🚆 Suburban stations
+        </label>
+      )}
+    </div>
+  );
+}
+
 export default function MapView({
   clickMode,
   onMapClick,
@@ -191,6 +209,10 @@ export default function MapView({
   disasters,
   simulation,
   coverageBounds,
+  hotspots = [],
+  stations = [],
+  layers = { hotspots: false, stations: false },
+  onToggleLayer,
   onSelectShelter,
 }) {
   // Keep the map near the mapped road network (with generous padding).
@@ -201,6 +223,9 @@ export default function MapView({
   }, [coverageBounds]);
 
   return (
+    <>
+    <LayerToggles layers={layers} onToggleLayer={onToggleLayer}
+                  hasHotspots={hotspots.length > 0} hasStations={stations.length > 0} />
     <MapContainer
       center={[19.08, 72.88]}
       zoom={11}
@@ -209,6 +234,7 @@ export default function MapView({
       minZoom={9}
       maxBounds={maxBounds}
       maxBoundsViscosity={0.8}
+      preferCanvas
     >
       <TileLayer
         url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
@@ -221,18 +247,36 @@ export default function MapView({
       <BoundsController routeResult={routeResult} simulation={simulation} />
 
       {/* ── Route segments, coloured by traffic / hazard factor ── */}
+      {layers.hotspots && hotspots.map(h => (
+        <Circle
+          key={h.id}
+          center={[h.lat, h.lon]}
+          radius={h.radiusMeters}
+          pathOptions={{ color: '#0284c7', fillColor: '#38bdf8', fillOpacity: 0.25, weight: 1.5, dashArray: '4 4' }}
+        >
+          <Tooltip>
+            💧 {h.name}{h.elevationM != null ? ` · ${Math.round(h.elevationM)} m` : ''}<br />
+            <small>Chronic monsoon water-logging spot (approximate)</small>
+          </Tooltip>
+        </Circle>
+      ))}
+
+      {layers.stations && stations.map(st => (
+        <CircleMarker
+          key={st.id}
+          center={[st.lat, st.lon]}
+          radius={5}
+          pathOptions={{ color: '#ffffff', weight: 1.5, fillColor: st.open ? '#7c3aed' : '#94a3b8', fillOpacity: 1 }}
+        >
+          <Tooltip>
+            🚆 {st.name}{st.open ? '' : ' — CLOSED (hazard)'}<br />
+            <small>{st.lines.join(', ')}</small>
+          </Tooltip>
+        </CircleMarker>
+      ))}
+
       {routeResult?.segments?.map((seg, i) => (
-        <Polyline
-          key={`seg-${i}`}
-          positions={seg.points}
-          pathOptions={{
-            color:   CONGESTION_COLORS[seg.congestion] || '#1a73e8',
-            weight:  CONGESTION_WEIGHT[seg.congestion] || 6,
-            opacity: 0.92,
-            lineCap: 'round',
-            lineJoin: 'round',
-          }}
-        />
+        <Polyline key={`seg-${i}`} positions={seg.points} pathOptions={segmentStyle(seg)} />
       ))}
       {routeResult?.points?.length > 1 && !routeResult?.segments?.length && (
         <Polyline positions={routeResult.points} pathOptions={{ color: '#1a73e8', weight: 6, opacity: 0.9 }} />
@@ -258,8 +302,15 @@ export default function MapView({
 
       {shelters.map(s => {
         const pct = Math.min(100, Math.round((s.currentOccupancy / s.totalCapacity) * 100));
+        const color = shelterColor(pct, s.unsafe);
         return (
-          <Marker key={s.id} position={[s.lat, s.lon]} icon={shelterIcon(pct, s.unsafe)}>
+          <CircleMarker
+            key={s.id}
+            center={[s.lat, s.lon]}
+            radius={shelterRadius(s.totalCapacity)}
+            pathOptions={{ color: '#ffffff', weight: 2, fillColor: color, fillOpacity: s.unsafe ? 0.5 : 0.95 }}
+          >
+            <Tooltip>{s.name} · {s.unsafe ? 'unsafe' : `${pct}% full`}</Tooltip>
             <Popup>
               <div className="popup-title">{s.name}</div>
               {s.unsafe && <div className="popup-sub" style={{ color: '#dc2626' }}><b>Unsafe — inside an active hazard zone</b></div>}
@@ -271,7 +322,7 @@ export default function MapView({
                 <button className="popup-action" onClick={() => onSelectShelter(s)}>📍 Evacuate Here</button>
               )}
             </Popup>
-          </Marker>
+          </CircleMarker>
         );
       })}
 
@@ -283,5 +334,6 @@ export default function MapView({
 
       <SimulationLayer simulation={simulation} />
     </MapContainer>
+    </>
   );
 }

@@ -44,10 +44,15 @@ public class RouteController {
     @GetMapping("/graph/stats")
     public Map<String, Object> graphStats() {
         Map<String, Object> stats = new LinkedHashMap<>();
-        stats.put("nodeCount", graphService.getGraph().getNodeCount());
-        stats.put("edgeCount", graphService.getGraph().getEdgeCount());
-        stats.put("bounds", graphService.getGraph().getBounds());
+        var graph = graphService.getGraph();
+        stats.put("roadNodeCount", graph.getRoadNodeCount());
+        stats.put("roadEdgeCount", graph.getEdgeCount(com.mumbai.evacuation.model.Edge.Kind.ROAD));
+        stats.put("walkOnlyEdgeCount", graph.getEdgeCount(com.mumbai.evacuation.model.Edge.Kind.ROAD_REVERSE));
+        stats.put("stationCount", graph.getStations().size());
+        stats.put("railEdgeCount", graph.getEdgeCount(com.mumbai.evacuation.model.Edge.Kind.RAIL));
+        stats.put("bounds", graph.getBounds());
         stats.put("blockedEdges", graphService.getHazardOverlay().getBlockedEdgeCount());
+        stats.put("lowLyingEdgesSlowed", graphService.getHazardOverlay().getLowLyingEdgeCount());
         return stats;
     }
 
