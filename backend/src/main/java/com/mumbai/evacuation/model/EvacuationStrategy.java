@@ -1,13 +1,12 @@
 package com.mumbai.evacuation.model;
 
 /**
- * Enumeration of Evacuation Routing & Shelter Assignment Strategies.
- * 
- * Design Decision Rationale:
- * - NAIVE_NEAREST (Strategy 1): Capacity-blind baseline. Every evacuee group routes to nearest shelter by distance,
- *   ignoring shelter capacity limits and accumulated traffic congestion. Used for benchmark comparison.
- * - CAPACITY_AWARE (Strategy 2): Capacity-aware greedy assignment engine. Respects shelter capacity, updates road traffic,
- *   mutates congestion factors, and triggers route recalculation if travel time increases by >= 20%.
+ * NAIVE_NEAREST   — every group goes to its closest reachable shelter, ignoring
+ *                   capacity and the traffic other groups create (baseline).
+ * CAPACITY_AWARE  — greedy assignment that respects remaining shelter capacity,
+ *                   splits groups across shelters when needed, accounts for the
+ *                   traffic earlier groups put on the roads, and re-routes groups
+ *                   whose route got >= 20% slower once all traffic is loaded.
  */
 public enum EvacuationStrategy {
     NAIVE_NEAREST,

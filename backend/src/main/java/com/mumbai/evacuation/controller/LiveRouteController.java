@@ -2,81 +2,50 @@ package com.mumbai.evacuation.controller;
 
 import com.mumbai.evacuation.dto.LiveRouteRequest;
 import com.mumbai.evacuation.dto.LiveRouteResponse;
-import com.mumbai.evacuation.service.TomTomService;
-import org.springframework.http.ResponseEntity;
+import com.mumbai.evacuation.dto.PlaceSuggestion;
+import com.mumbai.evacuation.service.GeocodingService;
+import com.mumbai.evacuation.service.LiveRouteService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+import java.util.Map;
+
 /**
- * LiveRouteController — secure backend proxy for TomTom live traffic routing.
- *
- * POST /api/live-route accepts a JSON body from the frontend.
- * GET  /api/live-route accepts query params (for browser/tool testing).
+ * Route planner and geocoding endpoints used by the UI. All third-party calls
+ * (TomTom, Photon, Nominatim) happen server-side so keys stay secret and the
+ * same code path works in development and production.
  */
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "*")
+@Validated
 public class LiveRouteController {
 
-    private final TomTomService tomTomService;
+    private final LiveRouteService liveRouteService;
+    private final GeocodingService geocodingService;
 
-    public LiveRouteController(TomTomService tomTomService) {
-        this.tomTomService = tomTomService;
+    public LiveRouteController(LiveRouteService liveRouteService, GeocodingService geocodingService) {
+        this.liveRouteService = liveRouteService;
+        this.geocodingService = geocodingService;
     }
 
-    /**
-     * POST /api/live-route
-     * Body: { "fromLat": 19.07, "fromLon": 72.87, "toLat": 19.02, "toLon": 72.84 }
-     */
+    /** POST /api/live-route — hazard-aware route, with live traffic when TomTom is configured. */
     @PostMapping("/live-route")
-    public ResponseEntity<LiveRouteResponse> calculateLiveRoutePost(
-            @RequestBody LiveRouteRequest request) {
-        LiveRouteResponse response = tomTomService.calculateLiveRoute(request);
-        return ResponseEntity.ok(response);
+    public LiveRouteResponse liveRoute(@Valid @RequestBody LiveRouteRequest request) {
+        return liveRouteService.route(request);
     }
 
-    /**
-     * GET /api/live-route?fromLat=...&fromLon=...&toLat=...&toLon=...
-     * Useful for browser testing and health-checks.
-     */
-    @GetMapping("/live-route")
-    public ResponseEntity<LiveRouteResponse> calculateLiveRouteGet(
-            @RequestParam(defaultValue = "19.0760") double fromLat,
-            @RequestParam(defaultValue = "72.8777") double fromLon,
-            @RequestParam(defaultValue = "19.0176") double toLat,
-            @RequestParam(defaultValue = "72.8461") double toLon) {
-
-        LiveRouteRequest req = new LiveRouteRequest();
-        req.setFromLat(fromLat);
-        req.setFromLon(fromLon);
-        req.setToLat(toLat);
-        req.setToLon(toLon);
-
-        LiveRouteResponse response = tomTomService.calculateLiveRoute(req);
-        return ResponseEntity.ok(response);
-    }
-
-    /**
-     * GET /api/geocode?lat={lat}&lon={lon}
-     * Returns a human-readable place name for the given coordinates.
-     */
+    /** GET /api/geocode?lat=&lon= — human-readable place name for coordinates. */
     @GetMapping("/geocode")
-    public ResponseEntity<?> reverseGeocode(
-            @RequestParam(defaultValue = "19.0760") double lat,
-            @RequestParam(defaultValue = "72.8777") double lon) {
-        String name = tomTomService.reverseGeocode(lat, lon);
-        return ResponseEntity.ok(java.util.Map.of("name", name, "lat", lat, "lon", lon));
+    public Map<String, Object> reverseGeocode(@RequestParam double lat, @RequestParam double lon) {
+        return Map.of("name", geocodingService.reverseGeocode(lat, lon), "lat", lat, "lon", lon);
     }
 
-    /**
-     * GET /api/search?q={query}&lat={biasLat}&lon={biasLon}
-     * Forward geocode — returns place suggestions for autocomplete.
-     */
+    /** GET /api/search?q= — place autocomplete limited to the mapped area. */
     @GetMapping("/search")
-    public ResponseEntity<?> searchPlaces(
-            @RequestParam String q,
-            @RequestParam(defaultValue = "19.18") double lat,
-            @RequestParam(defaultValue = "72.93") double lon) {
-        var suggestions = tomTomService.searchPlaces(q, lat, lon);
-        return ResponseEntity.ok(suggestions);
+    public List<PlaceSuggestion> searchPlaces(@RequestParam @Size(max = 100) String q) {
+        return geocodingService.search(q);
     }
 }

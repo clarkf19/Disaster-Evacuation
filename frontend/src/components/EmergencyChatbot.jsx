@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import * as API from '../services/backendApi';
 import styles from './EmergencyChatbot.module.css';
 
-export default function EmergencyChatbot() {
+export default function EmergencyChatbot({ userLocation = null }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     {
       sender: 'bot',
-      text: '### 🚨 Mumbai Emergency AI Assistant\n\nI am connected to real-time Mumbai disaster monitoring networks. Ask me about **flooding safety**, **fire evacuations**, **chemical spills**, **shelter availability**, or **emergency helplines**.',
+      text: '### 🚨 Emergency AI Assistant\n\nI can help with **flooding safety**, **fire evacuation**, **chemical leaks**, **open shelters** and **emergency helplines**. I know about the hazard zones and shelters in this app — set your start location in the route planner and I can suggest the nearest open shelter.\n\n**In a life-threatening emergency call 112 or BMC 1916 first.**',
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       actions: [
         { label: '🌊 Sion Flood Safety', query: 'What to do during Sion flooding?' },
@@ -131,7 +131,7 @@ export default function EmergencyChatbot() {
 
 
     try {
-      const res = await API.sendChatMessage(query);
+      const res = await API.sendChatMessage(query, userLocation?.lat ?? null, userLocation?.lon ?? null);
       const botMsg = {
         sender: 'bot',
         text: res.reply || 'No response received from safety assistant.',
@@ -140,12 +140,12 @@ export default function EmergencyChatbot() {
       };
       setMessages((prev) => [...prev, botMsg]);
     } catch (err) {
-      console.error('Chatbot error:', err);
+      const reason = err.status === 429 ? 'You are sending messages too quickly — wait a minute and try again.' : 'Unable to reach the assistant.';
       setMessages((prev) => [
         ...prev,
         {
           sender: 'bot',
-          text: '### ⚠️ Emergency Helpline Fallback\n\nUnable to reach live AI server. For urgent emergencies in Mumbai, please call:\n- **BMC Disaster Cell**: 1916\n- **Ambulance**: 108\n- **Police**: 100',
+          text: `### ⚠️ Emergency Helpline Fallback\n\n${reason} For urgent emergencies in Mumbai, call:\n- **National Emergency**: 112\n- **BMC Disaster Cell**: 1916\n- **Ambulance**: 108\n- **Fire**: 101`,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
@@ -232,9 +232,9 @@ export default function EmergencyChatbot() {
               </div>
               <div>
                 <h3 className={styles.headerTitle}>
-                  Mumbai Disaster AI
+                  Emergency AI Assistant
                 </h3>
-                <p className={styles.headerSubtitle}>Real-time Safety & Evacuation Guidance</p>
+                <p className={styles.headerSubtitle}>AI guidance — not an official service</p>
               </div>
             </div>
             <button className={styles.closeBtn} onClick={() => setIsOpen(false)} title="Close Chat Assistant">
@@ -325,6 +325,8 @@ export default function EmergencyChatbot() {
               className={styles.inputField}
               placeholder={isListening ? 'Listening to your voice...' : 'Ask safety doubts or emergency questions...'}
               value={input}
+              maxLength={1000}
+              aria-label="Message the emergency assistant"
               onChange={(e) => setInput(e.target.value)}
             />
             <button
@@ -335,6 +337,9 @@ export default function EmergencyChatbot() {
               ➔
             </button>
           </form>
+          <p className={styles.disclaimer}>
+            AI-generated advice can be wrong. In danger, call <b>112</b> or BMC <b>1916</b>.
+          </p>
         </div>
       )}
     </div>

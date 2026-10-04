@@ -1,37 +1,11 @@
 package com.mumbai.evacuation.dto;
 
-public class ChatRequest {
-    private String message;
-    private Double userLat;
-    private Double userLon;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
-    public ChatRequest() {}
-
-    public ChatRequest(String message) {
-        this.message = message;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public void setMessage(String message) {
-        this.message = message;
-    }
-
-    public Double getUserLat() {
-        return userLat;
-    }
-
-    public void setUserLat(Double userLat) {
-        this.userLat = userLat;
-    }
-
-    public Double getUserLon() {
-        return userLon;
-    }
-
-    public void setUserLon(Double userLon) {
-        this.userLon = userLon;
-    }
+/** Chat message plus the user's optional location (used to suggest nearby open shelters). */
+public record ChatRequest(
+        @NotBlank @Size(max = 1000) String message,
+        Double userLat,
+        Double userLon) {
 }

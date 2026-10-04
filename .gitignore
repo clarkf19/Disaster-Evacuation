@@ -15,12 +15,8 @@ application-local.yml
 secrets/
 
 
-# ── Required Data Files (Un-ignore Essential CSV Datasets) ───
+# ── Data (the road graph + shelters live in backend/src/main/resources/data/) ───
 data/*.csv
-!data/mumbai_nodes.csv
-!data/mumbai_edges.csv
-!backend/data/mumbai_nodes.csv
-!backend/data/mumbai_edges.csv
 data/*.json
 data/*.pkl
 data/*.parquet
@@ -32,6 +28,7 @@ graph_cache/
 *.graphml
 *.pickle
 osmnx_cache/
+scripts/.cache/
 
 
 # ── Java / Spring Boot / Maven ──────────────────────────────
@@ -49,7 +46,9 @@ release.properties
 dependency-reduced-pom.xml
 buildNumber.properties
 .mvn/timing.properties
-.mvn/wrapper/maven-wrapper.properties
+
+# Local Claude Code / editor launch configs
+.claude/
 
 
 # ── Python / OSMnx / Data Processing ───────────────────────

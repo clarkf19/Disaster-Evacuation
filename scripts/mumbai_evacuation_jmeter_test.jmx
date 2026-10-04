@@ -2,7 +2,7 @@
 <jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.2">
   <hashTree>
     <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="Mumbai Disaster Evacuation System - Load Test Plan" enabled="true">
-      <stringProp name="TestPlan.comments">JMeter load test simulating 100, 500, and 1000 concurrent virtual users querying routes, shelters, disasters, and capacity-aware evacuation engine.</stringProp>
+      <stringProp name="TestPlan.comments">JMeter load test for routes, shelters and the evacuation simulator. Start the backend with RATE_LIMIT_ENABLED=false first, otherwise the per-IP limits will (correctly) answer 429.</stringProp>
       <boolProp name="TestPlan.functional_mode">false</boolProp>
       <boolProp name="TestPlan.tearDown_on_shutdown">true</boolProp>
       <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
@@ -32,6 +32,15 @@
         <boolProp name="ThreadGroup.scheduler">false</boolProp>
       </ThreadGroup>
       <hashTree>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="JSON Headers" enabled="true">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header">
+              <stringProp name="Header.name">Content-Type</stringProp>
+              <stringProp name="Header.value">application/json</stringProp>
+            </elementProp>
+          </collectionProp>
+        </HeaderManager>
+        <hashTree/>
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET /api/shelters" enabled="true">
           <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
           <stringProp name="HTTPSampler.port">${PORT}</stringProp>
@@ -48,7 +57,7 @@
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
             <collectionProp name="Arguments.arguments">
               <elementProp name="" elementType="HTTPArgument">
-                <stringProp name="Argument.value">{ "sourceNodeId": 1001, "targetNodeId": 1015, "algorithm": "ASTAR" }</stringProp>
+                <stringProp name="Argument.value">{ "sourceNodeId": 590605977, "targetNodeId": 13702074457, "algorithm": "ASTAR" }</stringProp>
               </elementProp>
             </collectionProp>
           </elementProp>
@@ -59,6 +68,14 @@
           <stringProp name="HTTPSampler.port">${PORT}</stringProp>
           <stringProp name="HTTPSampler.path">/api/evacuation/simulate?strategy=CAPACITY_AWARE</stringProp>
           <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <stringProp name="Argument.value">{ "scenarioId": "sion_flood" }</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
         </HTTPSamplerProxy>
         <hashTree/>
       </hashTree>

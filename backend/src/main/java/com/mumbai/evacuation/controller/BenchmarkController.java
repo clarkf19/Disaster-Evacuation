@@ -1,107 +1,71 @@
 package com.mumbai.evacuation.controller;
 
-import com.mumbai.evacuation.algorithm.AStarEngine;
-import com.mumbai.evacuation.algorithm.DijkstraEngine;
-import com.mumbai.evacuation.model.Graph;
-import com.mumbai.evacuation.model.Node;
+import com.mumbai.evacuation.algorithm.EdgeCost;
 import com.mumbai.evacuation.model.PathResult;
 import com.mumbai.evacuation.service.GraphService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.*;
 
 /**
- * REST controller for Pathfinding Algorithm Performance Benchmarking (Dijkstra vs A*).
+ * Dijkstra vs A* on three long Mumbai corridors, under the live hazard overlay.
+ * Both must return the same optimal travel time; A* should explore fewer nodes.
  */
 @RestController
 @RequestMapping("/api/benchmark")
-@CrossOrigin(origins = "*")
 public class BenchmarkController {
 
-    @Autowired
-    private GraphService graphService;
+    private record Corridor(String name, double fromLat, double fromLon, double toLat, double toLon) {}
 
-    private final DijkstraEngine dijkstraEngine = new DijkstraEngine();
-    private final AStarEngine aStarEngine = new AStarEngine();
+    private static final List<Corridor> CORRIDORS = List.of(
+            new Corridor("Borivali -> Churchgate", 19.2307, 72.8567, 18.9322, 72.8264),
+            new Corridor("Dadar -> Andheri", 19.0178, 72.8478, 19.1197, 72.8464),
+            new Corridor("CST -> Goregaon", 18.9401, 72.8351, 19.1663, 72.8454));
 
-    /**
-     * GET /api/benchmark/algorithms — Benchmark Dijkstra vs A* on key Mumbai routes.
-     */
+    private final GraphService graphService;
+
+    public BenchmarkController(GraphService graphService) {
+        this.graphService = graphService;
+    }
+
     @GetMapping("/algorithms")
-    public ResponseEntity<Map<String, Object>> benchmarkAlgorithms() {
-        Graph graph = graphService.getGraph();
+    public Map<String, Object> benchmarkAlgorithms() {
+        EdgeCost cost = graphService.getHazardOverlay().asEdgeCost();
+        List<Map<String, Object>> results = new ArrayList<>();
+        for (Corridor c : CORRIDORS) {
+            long src = graphService.snap(c.fromLat(), c.fromLon()).node().getId();
+            long dst = graphService.snap(c.toLat(), c.toLon()).node().getId();
+            PathResult dijkstra = graphService.shortestPath(src, dst, "DIJKSTRA", cost);
+            PathResult aStar = graphService.shortestPath(src, dst, "ASTAR", cost);
 
-        // 3 Key Mumbai Corridors
-        long borivaliNode = findNearestNodeId(graph, 19.2307, 72.8567);
-        long churchgateNode = findNearestNodeId(graph, 18.9322, 72.8264);
-
-        long dadarNode = findNearestNodeId(graph, 19.0178, 72.8478);
-        long andheriNode = findNearestNodeId(graph, 19.1197, 72.8464);
-
-        long cstNode = findNearestNodeId(graph, 18.9401, 72.8351);
-        long goregaonNode = findNearestNodeId(graph, 19.1663, 72.8454);
-
-        List<Map<String, Object>> routeBenchmarks = new ArrayList<>();
-
-        routeBenchmarks.add(runPairBenchmark(graph, "Borivali -> Churchgate", borivaliNode, churchgateNode));
-        routeBenchmarks.add(runPairBenchmark(graph, "Dadar -> Andheri", dadarNode, andheriNode));
-        routeBenchmarks.add(runPairBenchmark(graph, "CST -> Goregaon", cstNode, goregaonNode));
-
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("graphSize", Map.of("nodeCount", graph.getNodeCount(), "edgeCount", graph.getEdgeCount()));
-        response.put("benchmarkResults", routeBenchmarks);
-        return ResponseEntity.ok(response);
-    }
-
-    private Map<String, Object> runPairBenchmark(Graph graph, String name, long src, long dst) {
-        PathResult dijkstraResult = dijkstraEngine.findShortestPath(graph, src, dst);
-        PathResult astarResult = aStarEngine.findShortestPath(graph, src, dst);
-
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("corridorName", name);
-        map.put("sourceNodeId", src);
-        map.put("targetNodeId", dst);
-
-        Map<String, Object> dMap = new LinkedHashMap<>();
-        dMap.put("algorithm", "DIJKSTRA");
-        dMap.put("executionTimeMs", dijkstraResult.getExecutionTimeMs());
-        dMap.put("executionTimeNs", dijkstraResult.getExecutionTimeNs());
-        dMap.put("nodesExplored", dijkstraResult.getNodesExplored());
-        dMap.put("totalDistanceKm", dijkstraResult.getTotalDistanceMeters() / 1000.0);
-        dMap.put("travelTimeMinutes", dijkstraResult.getTotalTravelTimeMinutes());
-
-        Map<String, Object> aMap = new LinkedHashMap<>();
-        aMap.put("algorithm", "ASTAR");
-        aMap.put("executionTimeMs", astarResult.getExecutionTimeMs());
-        aMap.put("executionTimeNs", astarResult.getExecutionTimeNs());
-        aMap.put("nodesExplored", astarResult.getNodesExplored());
-        aMap.put("totalDistanceKm", astarResult.getTotalDistanceMeters() / 1000.0);
-        aMap.put("travelTimeMinutes", astarResult.getTotalTravelTimeMinutes());
-
-        double searchSpaceReductionPercent = dijkstraResult.getNodesExplored() > 0 ?
-            ((double) (dijkstraResult.getNodesExplored() - astarResult.getNodesExplored()) / dijkstraResult.getNodesExplored()) * 100.0 : 0.0;
-
-        map.put("dijkstra", dMap);
-        map.put("aStar", aMap);
-        map.put("searchSpaceReductionPercent", Math.round(searchSpaceReductionPercent * 10.0) / 10.0);
-
-        return map;
-    }
-
-    private long findNearestNodeId(Graph graph, double lat, double lon) {
-        Node best = null;
-        double minDist = Double.MAX_VALUE;
-        for (Node n : graph.getAllNodes()) {
-            double dlat = n.getLatitude() - lat;
-            double dlon = n.getLongitude() - lon;
-            double d = dlat * dlat + dlon * dlon;
-            if (d < minDist) {
-                minDist = d;
-                best = n;
-            }
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("corridorName", c.name());
+            m.put("dijkstra", stats(dijkstra));
+            m.put("aStar", stats(aStar));
+            m.put("costsMatch", dijkstra.isPathFound() == aStar.isPathFound()
+                    && Math.abs(dijkstra.getTotalTravelTimeSeconds() - aStar.getTotalTravelTimeSeconds()) < 1e-6);
+            m.put("searchSpaceReductionPercent", dijkstra.getNodesExplored() > 0
+                    ? Math.round(1000.0 * (dijkstra.getNodesExplored() - aStar.getNodesExplored()) / dijkstra.getNodesExplored()) / 10.0
+                    : 0.0);
+            results.add(m);
         }
-        return best != null ? best.getId() : -1;
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("graphSize", Map.of("nodeCount", graphService.getGraph().getNodeCount(),
+                "edgeCount", graphService.getGraph().getEdgeCount()));
+        response.put("activeHazards", graphService.getActiveDisasters().size());
+        response.put("benchmarkResults", results);
+        return response;
+    }
+
+    private static Map<String, Object> stats(PathResult r) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("pathFound", r.isPathFound());
+        m.put("executionTimeMs", Math.round(r.getExecutionTimeMs() * 1000.0) / 1000.0);
+        m.put("nodesExplored", r.getNodesExplored());
+        m.put("totalDistanceKm", Math.round(r.getTotalDistanceMeters() / 10.0) / 100.0);
+        m.put("travelTimeMinutes", Math.round(r.getTotalTravelTimeMinutes() * 100.0) / 100.0);
+        return m;
     }
 }

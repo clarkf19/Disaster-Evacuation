@@ -1,12 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import MapView from './components/MapView';
 import RoutePlanner from './components/RoutePlanner';
 import DisasterPanel from './components/DisasterPanel';
 import ShelterPanel from './components/ShelterPanel';
+import CommandCentre from './components/CommandCentre';
 import EmergencyChatbot from './components/EmergencyChatbot';
-import { reverseGeocode } from './services/tomtomApi';
+import { calcLiveRoute, reverseGeocode } from './services/routingApi';
 import * as API from './services/backendApi';
 import styles from './App.module.css';
+
+const POLL_MS = 20_000;
+const FAST_POLL_MS = 4_000;
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('route');
@@ -17,62 +21,125 @@ export default function App() {
   const [dest, setDest] = useState(null);           // { lat, lon, name }
   const [pendingDisasterConfig, setPendingDisasterConfig] = useState(null);
 
-  // Data state
+  // Live data
+  const [config, setConfig] = useState(null);
+  const [online, setOnline] = useState(null);       // null = checking, true/false after first poll
   const [shelters, setShelters] = useState([]);
   const [disasters, setDisasters] = useState([]);
-  const [routeResult, setRouteResult] = useState(null);
 
-  useEffect(() => {
-    fetchShelters();
-    fetchDisasters();
+  // Map layers
+  const [hotspots, setHotspots] = useState([]);
+  const [stations, setStations] = useState([]);
+  const [layers, setLayers] = useState({ hotspots: true, stations: false });
+
+  // Route state
+  const [travelMode, setTravelMode] = useState('DRIVE'); // DRIVE | WALK | TRANSIT
+  const [routeResult, setRouteResult] = useState(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeError, setRouteError] = useState('');
+
+  // Command Centre simulation shown on the map: { comparison, strategy }
+  const [simulation, setSimulation] = useState(null);
+
+  // Transient message shown over the map
+  const [notice, setNotice] = useState(null);
+  const noticeTimer = useRef(null);
+  const showNotice = useCallback((text, kind = 'error') => {
+    setNotice({ text, kind });
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 7000);
   }, []);
 
-  async function fetchShelters() {
+  const refreshLiveData = useCallback(async () => {
     try {
-      const data = await API.getAllShelters();
-      setShelters(data || []);
-    } catch (e) {
-      console.error('Failed to load shelters:', e);
+      const [cfg, shelterData, disasterData] = await Promise.all([
+        API.getConfig(), API.getAllShelters(), API.listDisasters(),
+      ]);
+      setConfig(cfg);
+      setShelters(shelterData || []);
+      setDisasters(disasterData || []);
+      setOnline(true);
+      // Station open/closed status depends on live hazards; failures here are non-critical.
+      API.getRailStations().then(setStations).catch(() => {});
+    } catch {
+      setOnline(false);
     }
-  }
+  }, []);
 
-  async function fetchDisasters() {
+  useEffect(() => {
+    API.getFloodHotspots().then(d => setHotspots(d.hotspots || [])).catch(() => {});
+  }, []);
+
+  // Poll fast while demo mode is moving people (hazards active, or shelters still emptying).
+  const sheltersChanging = config?.demoMode
+    && (disasters.length > 0 || shelters.some(s => s.currentOccupancy > 0));
+  const pollMs = sheltersChanging ? FAST_POLL_MS : POLL_MS;
+
+  useEffect(() => {
+    refreshLiveData();
+  }, [refreshLiveData]);
+
+  useEffect(() => {
+    const id = setInterval(refreshLiveData, pollMs);
+    return () => clearInterval(id);
+  }, [refreshLiveData, pollMs]);
+
+  const computeRoute = useCallback(async (from, to, mode) => {
+    if (!from || !to) return;
+    setRouteError('');
+    setRouteLoading(true);
     try {
-      const data = await API.listDisasters();
-      setDisasters(data || []);
+      setRouteResult(await calcLiveRoute(from.lat, from.lon, to.lat, to.lon, mode));
     } catch (e) {
-      console.error('Failed to load disasters:', e);
+      setRouteError(e.message);
+      setRouteResult(null);
+    } finally {
+      setRouteLoading(false);
     }
-  }
+  }, []);
 
-  // Handle map clicks — reverse geocoding is done via backend proxy (no key in frontend)
+  // When the set of active hazards changes, re-plan the route currently on screen.
+  const disasterSignature = disasters.map(d => d.id).sort().join('|');
+  const lastSignature = useRef(disasterSignature);
+  useEffect(() => {
+    if (lastSignature.current === disasterSignature) return;
+    lastSignature.current = disasterSignature;
+    if (routeResult && source && dest) {
+      showNotice('Active hazards changed — route recalculated.', 'info');
+      computeRoute(source, dest, travelMode);
+    }
+    // routeResult intentionally omitted: only hazard changes should trigger this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disasterSignature]);
+
   async function handleMapClick(lat, lon) {
     if (!clickMode) return;
 
     if (clickMode === 'source') {
-      const name = await reverseGeocode(lat, lon);
-      setSource({ lat, lon, name });
       setClickMode('dest');
+      setSource({ lat, lon, name: 'Locating…' });
+      setSource({ lat, lon, name: await reverseGeocode(lat, lon) });
     } else if (clickMode === 'dest') {
-      const name = await reverseGeocode(lat, lon);
-      setDest({ lat, lon, name });
       setClickMode(null);
+      setDest({ lat, lon, name: 'Locating…' });
+      setDest({ lat, lon, name: await reverseGeocode(lat, lon) });
     } else if (clickMode === 'disaster' && pendingDisasterConfig) {
-      const disasterReq = {
-        id: `disaster-${Date.now()}`,
-        type: pendingDisasterConfig.type,
-        latitude: lat,
-        longitude: lon,
-        radiusMeters: pendingDisasterConfig.radius,
-        blockRoads: pendingDisasterConfig.action === 'block',
-        congestionMultiplier: pendingDisasterConfig.action === 'block' ? 1.0 : 3.5,
-        description: `Reported ${pendingDisasterConfig.type} hazard`,
-      };
+      const block = pendingDisasterConfig.action === 'block';
       try {
-        await API.addDisaster(disasterReq);
-        await fetchDisasters();
+        await API.addDisaster({
+          type: pendingDisasterConfig.type,
+          latitude: lat,
+          longitude: lon,
+          radiusMeters: pendingDisasterConfig.radius,
+          blockRoads: block,
+          congestionMultiplier: block ? 1.0 : 3.5,
+          description: `Reported ${pendingDisasterConfig.type.replace('_', ' ').toLowerCase()} hazard`,
+        });
+        await refreshLiveData();
       } catch (e) {
-        console.error('Failed to place disaster:', e);
+        showNotice(e.status === 401
+          ? 'Operator token required to place live disasters — enter it in the Disasters tab.'
+          : `Could not place disaster: ${e.message}`);
       } finally {
         setClickMode(null);
         setPendingDisasterConfig(null);
@@ -80,8 +147,8 @@ export default function App() {
     }
   }
 
-  function handleStartDisasterPlace(config) {
-    setPendingDisasterConfig(config);
+  function handleStartDisasterPlace(placement) {
+    setPendingDisasterConfig(placement);
     setClickMode('disaster');
   }
 
@@ -89,10 +156,10 @@ export default function App() {
     setSource(null);
     setDest(null);
     setRouteResult(null);
+    setRouteError('');
     setClickMode(null);
   }
 
-  // Called by RoutePlanner when GPS or text search sets a point directly
   function handleSourceSet(point) {
     setSource(point);
     setClickMode(null);
@@ -103,74 +170,81 @@ export default function App() {
     setClickMode(null);
   }
 
-  // Called when user selects a shelter from ShelterPanel or MapView popup
+  // Called when the user picks a shelter from the Shelters tab or a map popup
   function handleSelectShelter(shelter) {
+    if (shelter.unsafe) {
+      showNotice(`${shelter.name} is currently unsafe (inside a hazard zone). Pick another shelter.`);
+      return;
+    }
     const pct = Math.min(100, Math.round((shelter.currentOccupancy / shelter.totalCapacity) * 100));
-    setDest({
-      lat: shelter.lat,
-      lon: shelter.lon,
-      name: `${shelter.name} (${pct}% full)`,
-    });
+    setDest({ lat: shelter.lat, lon: shelter.lon, name: `${shelter.name} (${pct}% full)` });
     setActiveTab('route');
   }
+
+  const statusLabel = online === false ? 'Offline' : online ? (config?.liveTrafficEnabled ? 'Live traffic' : 'Online') : 'Connecting';
 
   return (
     <div className={styles.appContainer}>
       {/* ======== SIDEBAR ======== */}
       <aside className={styles.sidebar}>
-
-        {/* Header — no API key button */}
         <div className={styles.sidebarHeader}>
           <div className={styles.logoRow}>
-            <div className={styles.logoIcon}>🚨</div>
+            <div className={styles.logoIcon} aria-hidden="true">🚨</div>
             <div>
               <h1>Mumbai Evac</h1>
-              <p className={styles.subtitle}>Live Traffic & Evacuation System</p>
+              <p className={styles.subtitle}>Hazard-aware evacuation planning</p>
             </div>
           </div>
-          <div className={styles.liveBadge}>
+          <div
+            className={`${styles.liveBadge} ${online === false ? styles.offlineBadge : ''}`}
+            title={online === false ? 'Cannot reach the backend server' : 'Backend reachable'}
+          >
             <span className={styles.liveDot} />
-            Live
+            {statusLabel}
           </div>
         </div>
+
+        {online === false && (
+          <div className={styles.offlineBanner} role="alert">
+            Server unreachable — showing last known data. In a life-threatening emergency call <b>112</b> or BMC <b>1916</b>.
+          </div>
+        )}
 
         {/* KPI Bar */}
         <div className={styles.statusBar}>
           <div className={styles.kpiCard}>
-            <span className={styles.kpiValue}>{shelters.length}</span>
-            <span className={styles.kpiLabel}>Evac Shelters</span>
+            <span className={styles.kpiValue}>
+              {shelters.filter(s => !s.unsafe && !s.isFull).length}/{shelters.length}
+            </span>
+            <span className={styles.kpiLabel}>Shelters open</span>
           </div>
           <div className={styles.kpiCard}>
-            <span className={`${styles.kpiValue} ${styles.accentGreen}`}>
+            <span className={`${styles.kpiValue} ${disasters.length ? styles.accentRed : styles.accentGreen}`}>
               {disasters.length > 0 ? `${disasters.length} Active` : 'All Clear'}
             </span>
-            <span className={styles.kpiLabel}>Disaster Events</span>
+            <span className={styles.kpiLabel}>Hazard zones</span>
           </div>
         </div>
 
         {/* Navigation Tabs */}
-        <div className={styles.tabNav}>
-          <button
-            className={`${styles.tabBtn} ${activeTab === 'route' ? styles.activeTab : ''}`}
-            onClick={() => setActiveTab('route')}
-          >
-            ⚡ Live Route
-          </button>
-          <button
-            className={`${styles.tabBtn} ${activeTab === 'disasters' ? styles.activeTab : ''}`}
-            onClick={() => setActiveTab('disasters')}
-          >
-            ⚠️ Disasters {disasters.length > 0 && `(${disasters.length})`}
-          </button>
-          <button
-            className={`${styles.tabBtn} ${activeTab === 'shelters' ? styles.activeTab : ''}`}
-            onClick={() => setActiveTab('shelters')}
-          >
-            ⛺ Shelters
-          </button>
-        </div>
+        <nav className={styles.tabNav} aria-label="Sections">
+          {[
+            ['route', '⚡ Route'],
+            ['disasters', `⚠️ Hazards${disasters.length ? ` (${disasters.length})` : ''}`],
+            ['shelters', '⛺ Shelters'],
+            ['command', '📊 Command'],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              className={`${styles.tabBtn} ${activeTab === key ? styles.activeTab : ''}`}
+              onClick={() => setActiveTab(key)}
+              aria-current={activeTab === key ? 'page' : undefined}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
 
-        {/* Tab Contents */}
         <div className={styles.tabContent}>
           {activeTab === 'route' && (
             <RoutePlanner
@@ -179,10 +253,16 @@ export default function App() {
               source={source}
               dest={dest}
               onClear={handleClearRoute}
-              onRouteResult={setRouteResult}
+              onCompute={() => computeRoute(source, dest, travelMode)}
+              travelMode={travelMode}
+              onTravelModeChange={(m) => {
+                setTravelMode(m);
+                if (routeResult && source && dest) computeRoute(source, dest, m);
+              }}
+              loading={routeLoading}
+              error={routeError}
               onSourceSet={handleSourceSet}
               onDestSet={handleDestSet}
-              hasDisaster={disasters.length > 0}
               routeResult={routeResult}
               shelters={shelters}
             />
@@ -190,12 +270,34 @@ export default function App() {
           {activeTab === 'disasters' && (
             <DisasterPanel
               disasters={disasters}
-              onDisastersChange={fetchDisasters}
+              operatorTokenRequired={config?.operatorTokenRequired}
+              onDisastersChange={refreshLiveData}
               onPlaceMode={handleStartDisasterPlace}
+              onError={showNotice}
             />
           )}
           {activeTab === 'shelters' && (
-            <ShelterPanel shelters={shelters} onSelectShelter={handleSelectShelter} />
+            <ShelterPanel
+              shelters={shelters}
+              origin={source}
+              dataVerified={config?.shelterDataVerified}
+              demoMode={config?.demoMode}
+              hazardsActive={disasters.length > 0}
+              onToggleDemo={async (enabled) => {
+                try {
+                  await API.setDemoMode(enabled);
+                } catch (e) {
+                  showNotice(e.status === 401
+                    ? 'Operator token required — enter it in the Hazards tab.'
+                    : `Could not change demo mode: ${e.message}`);
+                }
+                refreshLiveData();
+              }}
+              onSelectShelter={handleSelectShelter}
+            />
+          )}
+          {activeTab === 'command' && (
+            <CommandCentre simulation={simulation} onSimulationChange={setSimulation} />
           )}
         </div>
       </aside>
@@ -210,27 +312,34 @@ export default function App() {
           routeResult={routeResult}
           shelters={shelters}
           disasters={disasters}
+          simulation={activeTab === 'command' ? simulation : null}
+          coverageBounds={config?.coverageBounds}
+          hotspots={hotspots}
+          stations={stations}
+          layers={layers}
+          onToggleLayer={(key) => setLayers(l => ({ ...l, [key]: !l[key] }))}
           onSelectShelter={handleSelectShelter}
         />
         {clickMode && clickMode !== 'disaster' && (
           <div className={styles.mapClickHint}>
             📍 Click map to set <b>{clickMode === 'source' ? 'START' : 'DESTINATION'}</b> point
-            <button className={styles.cancelClickBtn} onClick={() => setClickMode(null)}>
-              Cancel
-            </button>
+            <button className={styles.cancelClickBtn} onClick={() => setClickMode(null)}>Cancel</button>
           </div>
         )}
         {clickMode === 'disaster' && (
-          <div className={styles.mapClickHint} style={{ borderColor: '#ea4335' }}>
-            ⚠️ Click map to place <b>DISASTER EPICENTER</b>
-            <button className={styles.cancelClickBtn} onClick={() => setClickMode(null)}>
-              Cancel
-            </button>
+          <div className={`${styles.mapClickHint} ${styles.mapClickHintDanger}`}>
+            ⚠️ Click map to place <b>HAZARD CENTRE</b>
+            <button className={styles.cancelClickBtn} onClick={() => setClickMode(null)}>Cancel</button>
+          </div>
+        )}
+        {notice && (
+          <div className={`${styles.notice} ${notice.kind === 'info' ? styles.noticeInfo : ''}`} role="status">
+            {notice.text}
+            <button className={styles.cancelClickBtn} onClick={() => setNotice(null)} aria-label="Dismiss">✕</button>
           </div>
         )}
 
-        {/* Emergency AI Assistant Chatbot Widget */}
-        <EmergencyChatbot />
+        <EmergencyChatbot userLocation={source} />
       </main>
     </div>
   );

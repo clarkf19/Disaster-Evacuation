@@ -1,141 +1,110 @@
 package com.mumbai.evacuation.model;
 
 /**
- * Represents a directional road segment connecting two nodes in Mumbai.
- * 
- * Design Decision & Formula Rationale:
- * 1. Dynamic Congestion Mapping:
- *    - Congestion ratio = currentTraffic / capacity
- *    - Ratio 0.00 - 0.30 => Congestion Factor = 1.0
- *    - Ratio 0.30 - 0.60 => Congestion Factor = 1.3
- *    - Ratio 0.60 - 0.80 => Congestion Factor = 1.7
- *    - Ratio > 0.80      => Congestion Factor = 2.5
- * 2. Edge Travel Time (Cost Weight in seconds):
- *    - Speed in meters/second = (speedLimitKmH * 1000.0) / 3600.0
- *    - Free-flow Travel Time = distanceMeters / speedMetersPerSecond
- *    - Dynamic Effective Travel Time = Free-flow Travel Time * Congestion Factor
- *    - If blocked == true, cost is Double.POSITIVE_INFINITY (impassable).
- *    - Travel time is guaranteed to stay strictly positive (> 0.0) preventing zero/negative cycle bugs in Dijkstra.
+ * Immutable directed edge of the multimodal network.
+ *
+ * Kinds:
+ * <ul>
+ *   <li>ROAD — drivable OSM road segment (also walkable).</li>
+ *   <li>ROAD_REVERSE — the opposite direction of a one-way road; walkable only,
+ *       because one-way rules don't apply to pedestrians.</li>
+ *   <li>RAIL — suburban train between consecutive stations (capacity in persons/hour).</li>
+ *   <li>TRANSFER — walking between a station and its nearest road node; boarding
+ *       includes the average wait for a train.</li>
+ * </ul>
+ *
+ * Everything that changes at runtime (hazards, simulated load) lives in cost
+ * overlays, never on the edge itself.
+ *
+ * Congestion mapping (load vs. capacity, both per hour):
+ *   ratio 0.00-0.30 -> 1.0, 0.30-0.60 -> 1.3, 0.60-0.80 -> 1.7, > 0.80 -> 2.5
  */
-public class Edge {
+public final class Edge {
+
+    public enum Kind { ROAD, ROAD_REVERSE, RAIL, TRANSFER }
+
     private final long id;
     private final long sourceNodeId;
     private final long targetNodeId;
     private final double distanceMeters;
     private final String roadType;
     private final double speedLimitKmH;
-    private final int capacity;
-    
-    private int currentTraffic;
-    private boolean blocked;
-    private double customCongestionMultiplier = 1.0;
+    private final int capacityPerHour;
+    private final double freeFlowSeconds;
+    private final Kind kind;
+    private final String line;
 
-    public Edge(long id, long sourceNodeId, long targetNodeId, double distanceMeters, 
-                String roadType, double speedLimitKmH, int capacity) {
+    /** Drivable road segment. */
+    public Edge(long id, long sourceNodeId, long targetNodeId, double distanceMeters,
+                String roadType, double speedLimitKmH, int capacityVehiclesPerHour) {
+        this(id, sourceNodeId, targetNodeId, distanceMeters, roadType, speedLimitKmH, capacityVehiclesPerHour,
+                Kind.ROAD, null, Double.NaN);
+    }
+
+    private Edge(long id, long sourceNodeId, long targetNodeId, double distanceMeters, String roadType,
+                 double speedLimitKmH, int capacityPerHour, Kind kind, String line, double fixedSeconds) {
         this.id = id;
         this.sourceNodeId = sourceNodeId;
         this.targetNodeId = targetNodeId;
         this.distanceMeters = Math.max(1.0, distanceMeters);
         this.roadType = roadType;
         this.speedLimitKmH = Math.max(10.0, speedLimitKmH);
-        this.capacity = Math.max(1, capacity);
-        this.currentTraffic = 0;
-        this.blocked = false;
+        this.capacityPerHour = Math.max(1, capacityPerHour);
+        this.kind = kind;
+        this.line = line;
+        this.freeFlowSeconds = Double.isNaN(fixedSeconds)
+                ? this.distanceMeters / (this.speedLimitKmH * 1000.0 / 3600.0)
+                : fixedSeconds;
     }
 
-    public long getId() {
-        return id;
+    /** Walk-only reverse of a one-way road. */
+    public static Edge reverseForWalking(long id, Edge road) {
+        return new Edge(id, road.targetNodeId, road.sourceNodeId, road.distanceMeters, road.roadType,
+                road.speedLimitKmH, road.capacityPerHour, Kind.ROAD_REVERSE, null, Double.NaN);
     }
 
-    public long getSourceNodeId() {
-        return sourceNodeId;
+    /** Train link between consecutive stations: running time at {@code speedKmH} plus a station dwell. */
+    public static Edge rail(long id, long fromStation, long toStation, double meters, String line,
+                            double speedKmH, double dwellSeconds, int capacityPersonsPerHour) {
+        double seconds = meters / (speedKmH * 1000.0 / 3600.0) + dwellSeconds;
+        return new Edge(id, fromStation, toStation, meters, "rail", speedKmH, capacityPersonsPerHour,
+                Kind.RAIL, line, seconds);
     }
 
-    public long getTargetNodeId() {
-        return targetNodeId;
+    /** Station access/egress walk with a fixed time (e.g. including the wait for a train). */
+    public static Edge transfer(long id, long from, long to, double meters, double seconds) {
+        return new Edge(id, from, to, meters, "transfer", 10, Integer.MAX_VALUE, Kind.TRANSFER, null, seconds);
     }
 
-    public double getDistanceMeters() {
-        return distanceMeters;
-    }
+    public long getId() { return id; }
+    public long getSourceNodeId() { return sourceNodeId; }
+    public long getTargetNodeId() { return targetNodeId; }
+    public double getDistanceMeters() { return distanceMeters; }
+    public String getRoadType() { return roadType; }
+    public double getSpeedLimitKmH() { return speedLimitKmH; }
+    public Kind getKind() { return kind; }
+    public boolean isRoad() { return kind == Kind.ROAD || kind == Kind.ROAD_REVERSE; }
+    /** Suburban line name for RAIL edges, otherwise null. */
+    public String getLine() { return line; }
 
-    public String getRoadType() {
-        return roadType;
-    }
+    /** Capacity per hour: vehicles for roads, persons for rail. */
+    public int getCapacity() { return capacityPerHour; }
 
-    public double getSpeedLimitKmH() {
-        return speedLimitKmH;
-    }
+    /** Uncongested traversal time in seconds for this edge's own mode. Always > 0. */
+    public double getFreeFlowSeconds() { return freeFlowSeconds; }
 
-    public int getCapacity() {
-        return capacity;
-    }
-
-    public int getCurrentTraffic() {
-        return currentTraffic;
-    }
-
-    public synchronized void setCurrentTraffic(int currentTraffic) {
-        this.currentTraffic = Math.max(0, currentTraffic);
-    }
-
-    public synchronized void addTraffic(int count) {
-        this.currentTraffic = Math.max(0, this.currentTraffic + count);
-    }
-
-    public synchronized void resetTraffic() {
-        this.currentTraffic = 0;
-    }
-
-    public boolean isBlocked() {
-        return blocked;
-    }
-
-    public void setBlocked(boolean blocked) {
-        this.blocked = blocked;
-    }
-
-    public double getCustomCongestionMultiplier() {
-        return customCongestionMultiplier;
-    }
-
-    public void setCustomCongestionMultiplier(double customCongestionMultiplier) {
-        this.customCongestionMultiplier = Math.max(1.0, customCongestionMultiplier);
-    }
-
-    /**
-     * Calculates dynamic congestion factor according to system spec.
-     */
-    public double getCongestionFactor() {
-        double ratio = (double) currentTraffic / (double) capacity;
-        double factor;
-        if (ratio <= 0.30) {
-            factor = 1.0;
-        } else if (ratio <= 0.60) {
-            factor = 1.3;
-        } else if (ratio <= 0.80) {
-            factor = 1.7;
-        } else {
-            factor = 2.5;
-        }
-        return factor * customCongestionMultiplier;
-    }
-
-    /**
-     * Calculates travel time in seconds. Returns Double.POSITIVE_INFINITY if road is blocked.
-     */
-    public double getTravelTimeSeconds() {
-        if (blocked) {
-            return Double.POSITIVE_INFINITY;
-        }
-        double speedMps = (speedLimitKmH * 1000.0) / 3600.0;
-        double freeFlowTimeSeconds = distanceMeters / speedMps;
-        return freeFlowTimeSeconds * getCongestionFactor();
+    /** Congestion factor for a given load per hour (same units as the capacity). */
+    public double congestionFactorFor(double loadPerHour) {
+        double ratio = loadPerHour / capacityPerHour;
+        if (ratio <= 0.30) return 1.0;
+        if (ratio <= 0.60) return 1.3;
+        if (ratio <= 0.80) return 1.7;
+        return 2.5;
     }
 
     @Override
     public String toString() {
-        return "Edge{" + "id=" + id + ", src=" + sourceNodeId + ", dst=" + targetNodeId + 
-               ", dist=" + distanceMeters + "m, speed=" + speedLimitKmH + "km/h, blocked=" + blocked + '}';
+        return "Edge{id=" + id + ", " + kind + ", src=" + sourceNodeId + ", dst=" + targetNodeId +
+               ", dist=" + distanceMeters + "m" + (line != null ? ", line=" + line : "") + '}';
     }
 }

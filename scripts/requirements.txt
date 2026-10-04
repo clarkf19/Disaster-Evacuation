@@ -1,0 +1,3 @@
+# Data pipeline for scripts/build_datasets.py (roads, rail and schools come from the
+# Overpass API using only the standard library; rasterio reads the elevation tiles)
+rasterio>=1.4

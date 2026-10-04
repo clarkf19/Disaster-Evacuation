@@ -43,12 +43,13 @@
 
 .live {
   font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  color: #ea4335;
-  background: #fce8e6;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #334155;
+  background: rgba(255, 255, 255, 0.7);
   padding: 2px 6px;
   border-radius: 4px;
+  white-space: nowrap;
 }
 
 .message {
@@ -56,6 +57,45 @@
   color: #475569;
   line-height: 1.5;
   margin-bottom: 12px;
+}
+
+.legs {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 0.76rem;
+}
+
+.legs li {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  gap: 6px;
+  align-items: start;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+  padding: 6px 8px;
+  color: #334155;
+}
+
+.legs li span:last-child {
+  font-weight: 700;
+  color: #1e293b;
+  white-space: nowrap;
+}
+
+.warnings {
+  list-style: none;
+  font-size: 0.75rem;
+  color: #7c2d12;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .metrics {

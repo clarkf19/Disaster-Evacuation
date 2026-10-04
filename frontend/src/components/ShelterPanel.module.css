@@ -86,7 +86,7 @@
 .progressFill {
   height: 100%;
   border-radius: 3px;
-  transition: width 0.4s ease;
+  transition: width 1.2s ease, background-color 0.6s ease;
 }
 
 .navBtn {
@@ -103,8 +103,135 @@
   text-align: center;
 }
 
-.navBtn:hover {
+.navBtn:hover:not(:disabled) {
   background: #166534;
   color: white;
   border-color: #166534;
+}
+
+.navBtn:disabled {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.cardUnsafe {
+  background: #f8fafc;
+  opacity: 0.85;
+}
+
+.note {
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+.unverified {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.searchRow {
+  margin: 0 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.search {
+  padding: 8px 10px;
+  border: 1.5px solid var(--panel-border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.sortHint {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+}
+
+.moreBtn {
+  padding: 8px;
+  border: 1.5px dashed var(--panel-border);
+  border-radius: 8px;
+  background: #ffffff;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.demoBanner {
+  margin: 0 16px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.demoBanner b {
+  color: var(--text-primary);
+}
+
+.demoBanner p {
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.demoOn {
+  background: var(--google-blue-light);
+  border-color: #c5d8fb;
+}
+
+.demoToggle {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1.5px solid var(--panel-border);
+  background: #ffffff;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.arriving, .leaving {
+  margin-left: 6px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+  animation: pop 0.4s ease;
+}
+
+.arriving {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.leaving {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+@keyframes pop {
+  from { transform: scale(0.6); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arriving, .leaving { animation: none; }
 }

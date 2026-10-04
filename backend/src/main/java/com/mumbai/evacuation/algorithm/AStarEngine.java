@@ -5,122 +5,62 @@ import com.mumbai.evacuation.model.*;
 import java.util.*;
 
 /**
- * Classical A* Shortest Path Search Engine using Haversine Distance Heuristic.
- * 
- * Algorithm Specification (per system prompt requirements):
- * - Evaluates nodes based on f(n) = g(n) + h(n)
- *   - g(n) = actual dynamic travel time in seconds from source to node n.
- *   - h(n) = admissible Haversine travel time heuristic to target node.
- * - Significantly reduces search space (nodes explored) compared to uniform-cost Dijkstra.
- * - Tracks execution time (ns) and total nodes explored for benchmark comparison.
+ * A* search over travel time with an admissible straight-line heuristic
+ * (see {@link Heuristic}). Returns the same optimal cost as Dijkstra while
+ * exploring far fewer nodes on long corridors.
  */
 public class AStarEngine {
 
-    private static class NodeFScore implements Comparable<NodeFScore> {
-        final long nodeId;
-        final double fScore;
+    private record QueueEntry(long nodeId, double fScore) {}
 
-        NodeFScore(long nodeId, double fScore) {
-            this.nodeId = nodeId;
-            this.fScore = fScore;
-        }
-
-        @Override
-        public int compareTo(NodeFScore o) {
-            return Double.compare(this.fScore, o.fScore);
-        }
+    /** Driving search: the heuristic uses the fastest road speed limit. */
+    public PathResult findShortestPath(Graph graph, EdgeCost cost, long sourceNodeId, long targetNodeId) {
+        return findShortestPath(graph, cost, sourceNodeId, targetNodeId, graph.getMaxRoadSpeedKmH());
     }
 
-    public PathResult findShortestPath(Graph graph, long sourceNodeId, long targetNodeId) {
-        long startTime = System.nanoTime();
-
-        Node sourceNode = graph.getNode(sourceNodeId);
+    /**
+     * @param maxSpeedKmH an upper bound on speed for the mode being searched; every
+     *                    finite edge cost must be >= distance / maxSpeed (admissibility)
+     */
+    public PathResult findShortestPath(Graph graph, EdgeCost cost, long sourceNodeId, long targetNodeId, double maxSpeedKmH) {
+        long start = System.nanoTime();
         Node targetNode = graph.getNode(targetNodeId);
-        if (sourceNode == null || targetNode == null) {
-            return PathResult.emptyResult(0, System.nanoTime() - startTime);
+        if (graph.getNode(sourceNodeId) == null || targetNode == null) {
+            return PathResult.emptyResult(0, System.nanoTime() - start);
         }
-
-        if (sourceNodeId == targetNodeId) {
-            return new PathResult(Collections.singletonList(sourceNode), Collections.emptyList(), 0.0, 0.0, 1, System.nanoTime() - startTime, true);
-        }
+        double maxSpeed = maxSpeedKmH;
 
         Map<Long, Double> gScore = new HashMap<>();
-        Map<Long, Edge> parentEdgeMap = new HashMap<>();
-        PriorityQueue<NodeFScore> openSet = new PriorityQueue<>();
-        Set<Long> closedSet = new HashSet<>();
+        Map<Long, Edge> parent = new HashMap<>();
+        Set<Long> closed = new HashSet<>();
+        PriorityQueue<QueueEntry> open = new PriorityQueue<>(Comparator.comparingDouble(QueueEntry::fScore));
 
         gScore.put(sourceNodeId, 0.0);
-        double initialH = Heuristic.calculateAdmissibleTravelTimeHeuristic(sourceNode, targetNode);
-        openSet.add(new NodeFScore(sourceNodeId, initialH));
+        open.add(new QueueEntry(sourceNodeId,
+                Heuristic.travelTimeLowerBoundSeconds(graph.getNode(sourceNodeId), targetNode, maxSpeed)));
 
-        int nodesExplored = 0;
-        boolean found = false;
-
-        while (!openSet.isEmpty()) {
-            NodeFScore current = openSet.poll();
-            long u = current.nodeId;
-
-            if (closedSet.contains(u)) continue;
-            closedSet.add(u);
-            nodesExplored++;
-
+        while (!open.isEmpty()) {
+            long u = open.poll().nodeId();
+            if (!closed.add(u)) continue;
             if (u == targetNodeId) {
-                found = true;
-                break;
+                return new ShortestPathTree(graph, sourceNodeId, gScore, parent, closed, closed.size(),
+                        System.nanoTime() - start).pathTo(targetNodeId);
             }
-
-            double currentG = gScore.getOrDefault(u, Double.POSITIVE_INFINITY);
-            Node currNode = graph.getNode(u);
-
+            double g = gScore.get(u);
             for (Edge edge : graph.getOutgoingEdges(u)) {
-                if (edge.isBlocked()) continue; // Impassable road due to disaster
-
                 long v = edge.getTargetNodeId();
-                if (closedSet.contains(v)) continue;
-
-                double travelTime = edge.getTravelTimeSeconds();
-                if (Double.isInfinite(travelTime) || travelTime <= 0) continue;
-
-                double tentativeG = currentG + travelTime;
-
-                if (tentativeG < gScore.getOrDefault(v, Double.POSITIVE_INFINITY)) {
-                    gScore.put(v, tentativeG);
-                    parentEdgeMap.put(v, edge);
-
-                    Node neighborNode = graph.getNode(v);
-                    double h = Heuristic.calculateAdmissibleTravelTimeHeuristic(neighborNode, targetNode);
-                    double fScore = tentativeG + h;
-
-                    openSet.add(new NodeFScore(v, fScore));
+                if (closed.contains(v)) continue;
+                double edgeCost = cost.seconds(edge);
+                if (!Double.isFinite(edgeCost)) continue;
+                double tentative = g + edgeCost;
+                if (tentative < gScore.getOrDefault(v, Double.POSITIVE_INFINITY)) {
+                    gScore.put(v, tentative);
+                    parent.put(v, edge);
+                    double h = Heuristic.travelTimeLowerBoundSeconds(graph.getNode(v), targetNode, maxSpeed);
+                    open.add(new QueueEntry(v, tentative + h));
                 }
             }
         }
-
-        long endTime = System.nanoTime();
-        long executionTimeNs = endTime - startTime;
-
-        if (!found) {
-            return PathResult.emptyResult(nodesExplored, executionTimeNs);
-        }
-
-        // Reconstruct path
-        LinkedList<Node> pathNodes = new LinkedList<>();
-        LinkedList<Edge> pathEdges = new LinkedList<>();
-        long curr = targetNodeId;
-        double totalDistMeters = 0.0;
-
-        pathNodes.addFirst(graph.getNode(curr));
-        while (curr != sourceNodeId) {
-            Edge edge = parentEdgeMap.get(curr);
-            if (edge == null) break;
-            pathEdges.addFirst(edge);
-            totalDistMeters += edge.getDistanceMeters();
-            curr = edge.getSourceNodeId();
-            pathNodes.addFirst(graph.getNode(curr));
-        }
-
-        double totalTravelTimeSeconds = gScore.get(targetNodeId);
-
-        return new PathResult(pathNodes, pathEdges, totalDistMeters, totalTravelTimeSeconds, nodesExplored, executionTimeNs, true);
+        return PathResult.emptyResult(closed.size(), System.nanoTime() - start);
     }
 }
