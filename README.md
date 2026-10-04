@@ -18,6 +18,7 @@
 - Four hazard types: flood, fire, bridge collapse and chemical leak. Each one either **blocks roads** or adds **heavy congestion** (a travel-time multiplier).
 - Live hazards affect routing for everyone, so adding or removing them requires an **operator token** (`ADMIN_TOKEN`).
 - Shelters inside a hazard zone (or flood-prone sites during a flood) are flagged **unsafe** and excluded.
+- **Demo mode** (on by default) brings the shelters to life. Each active zone gets an estimated number of people needing shelter (zone area × density × share evacuating). Every few seconds a batch of them arrives at the nearest safe shelters by road travel time, spilling over when a shelter fills. When hazards are cleared, shelters gradually empty. This data is simulated and labelled as such in the UI.
 
 ### 3. 📊 Command Centre: evacuation simulation
 Runs the same scenario through two strategies and compares them side by side on the map:
@@ -118,6 +119,7 @@ cd frontend && npm test
 | `ADMIN_TOKEN` | Operator token for changing live hazards and shelters. **Required in any deployment.** When empty, those endpoints are open (local development only). |
 | `CORS_ALLOWED_ORIGINS` | Only needed if browsers call the backend directly instead of through `/api` |
 | `EVAC_PERSONS_PER_VEHICLE`, `EVAC_WINDOW_HOURS` | Simulation traffic model |
+| `DEMO_MODE` | Simulated shelter arrivals from active hazard zones (default `true`; operators can toggle it in the Shelters tab). Turn off once real check-in data is connected. |
 | `RATE_LIMIT_ENABLED` | Per-IP rate limits for chat, routing, search and simulations (default `true`) |
 
 ---

@@ -10,6 +10,7 @@ import * as API from './services/backendApi';
 import styles from './App.module.css';
 
 const POLL_MS = 20_000;
+const FAST_POLL_MS = 4_000;
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('route');
@@ -57,11 +58,19 @@ export default function App() {
     }
   }, []);
 
+  // Poll fast while demo mode is moving people (hazards active, or shelters still emptying).
+  const sheltersChanging = config?.demoMode
+    && (disasters.length > 0 || shelters.some(s => s.currentOccupancy > 0));
+  const pollMs = sheltersChanging ? FAST_POLL_MS : POLL_MS;
+
   useEffect(() => {
     refreshLiveData();
-    const id = setInterval(refreshLiveData, POLL_MS);
-    return () => clearInterval(id);
   }, [refreshLiveData]);
+
+  useEffect(() => {
+    const id = setInterval(refreshLiveData, pollMs);
+    return () => clearInterval(id);
+  }, [refreshLiveData, pollMs]);
 
   const computeRoute = useCallback(async (from, to) => {
     if (!from || !to) return;
@@ -254,6 +263,18 @@ export default function App() {
             <ShelterPanel
               shelters={shelters}
               dataVerified={config?.shelterDataVerified}
+              demoMode={config?.demoMode}
+              hazardsActive={disasters.length > 0}
+              onToggleDemo={async (enabled) => {
+                try {
+                  await API.setDemoMode(enabled);
+                } catch (e) {
+                  showNotice(e.status === 401
+                    ? 'Operator token required — enter it in the Hazards tab.'
+                    : `Could not change demo mode: ${e.message}`);
+                }
+                refreshLiveData();
+              }}
               onSelectShelter={handleSelectShelter}
             />
           )}

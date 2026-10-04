@@ -58,6 +58,7 @@ export const getConfig = () => request('/config');
 
 // --- Shelters ---
 export const getAllShelters = () => request('/shelters');
+export const setDemoMode    = (enabled) => request('/shelters/demo', { method: 'POST', body: { enabled }, operator: true });
 
 // --- Disasters (mutations need the operator token when the backend requires one) ---
 export const listDisasters     = () => request('/disasters');

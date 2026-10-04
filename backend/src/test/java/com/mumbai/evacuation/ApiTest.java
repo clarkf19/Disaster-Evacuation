@@ -16,7 +16,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties = {"security.admin-token=test-token", "tomtom.api.key=", "llm.api-key=",
-        "ratelimit.enabled=false"})
+        "ratelimit.enabled=false", "demo.enabled=false"})
 @AutoConfigureMockMvc
 class ApiTest {
 

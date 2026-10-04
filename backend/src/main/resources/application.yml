@@ -54,6 +54,12 @@ app:
 ratelimit:
   enabled: ${RATE_LIMIT_ENABLED:true}
 
+# Demo mode: shelters fill up from active hazard zones and empty when hazards clear.
+# Simulated data — set DEMO_MODE=false once real check-in data is connected.
+demo:
+  enabled: ${DEMO_MODE:true}
+  tick-ms: ${DEMO_TICK_MS:4000}
+
 # TomTom live traffic — key stays on the backend only
 tomtom:
   api:

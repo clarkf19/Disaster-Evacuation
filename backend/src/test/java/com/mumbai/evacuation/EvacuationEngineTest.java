@@ -21,7 +21,7 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Runs against the real Mumbai road graph and shelter data. */
-@SpringBootTest(properties = {"tomtom.api.key=", "llm.api-key=", "ratelimit.enabled=false"})
+@SpringBootTest(properties = {"tomtom.api.key=", "llm.api-key=", "ratelimit.enabled=false", "demo.enabled=false"})
 class EvacuationEngineTest {
 
     @Autowired EvacuationEngine engine;

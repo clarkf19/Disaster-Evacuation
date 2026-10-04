@@ -59,6 +59,20 @@ public class Shelter {
 
     public synchronized void resetOccupancy() { this.currentOccupancy = 0; }
 
+    /** Admits up to {@code people} arrivals; returns how many fitted. */
+    public synchronized int admit(int people) {
+        int admitted = Math.max(0, Math.min(people, totalCapacity - currentOccupancy));
+        currentOccupancy += admitted;
+        return admitted;
+    }
+
+    /** Releases up to {@code people} occupants; returns how many left. */
+    public synchronized int release(int people) {
+        int released = Math.max(0, Math.min(people, currentOccupancy));
+        currentOccupancy -= released;
+        return released;
+    }
+
     @Override
     public synchronized String toString() {
         return "Shelter{id=" + id + ", name='" + name + "', occupancy=" + currentOccupancy + "/" + totalCapacity + '}';

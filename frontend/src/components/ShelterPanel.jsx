@@ -1,7 +1,9 @@
 import styles from './ShelterPanel.module.css';
 
-export default function ShelterPanel({ shelters, dataVerified, onSelectShelter }) {
+export default function ShelterPanel({ shelters, dataVerified, demoMode, hazardsActive, onToggleDemo, onSelectShelter }) {
   const sorted = [...shelters].sort((a, b) => (a.unsafe - b.unsafe) || a.name.localeCompare(b.name));
+  const totalPeople = shelters.reduce((sum, s) => sum + (s.currentOccupancy || 0), 0);
+  const arrivingNow = shelters.reduce((sum, s) => sum + Math.max(0, s.recentChange || 0), 0);
 
   return (
     <div className={styles.panel}>
@@ -17,6 +19,28 @@ export default function ShelterPanel({ shelters, dataVerified, onSelectShelter }
         )}
       </div>
 
+      {demoMode !== undefined && (
+        <div className={`${styles.demoBanner} ${demoMode ? styles.demoOn : ''}`}>
+          <div>
+            <b>{demoMode ? '🎬 Demo mode: simulated arrivals' : 'Demo mode is off'}</b>
+            <p>
+              {!demoMode
+                ? 'Occupancy changes only when operators update it.'
+                : hazardsActive
+                  ? `People from active hazard zones are heading to the nearest safe shelters${arrivingNow ? ` (+${arrivingNow.toLocaleString()} just arrived)` : ''}.`
+                  : totalPeople > 0
+                    ? 'No active hazards — shelters are emptying as people return home.'
+                    : 'Place a hazard zone in the Hazards tab and watch shelters fill up.'}
+            </p>
+          </div>
+          {onToggleDemo && (
+            <button className={styles.demoToggle} onClick={() => onToggleDemo(!demoMode)}>
+              {demoMode ? 'Turn off' : 'Turn on'}
+            </button>
+          )}
+        </div>
+      )}
+
       <div className={styles.shelterList}>
         {shelters.length === 0 ? (
           <p className={styles.empty}>Loading shelters...</p>
@@ -31,7 +55,11 @@ export default function ShelterPanel({ shelters, dataVerified, onSelectShelter }
             return (
               <div key={s.id} className={`${styles.card} ${s.unsafe ? styles.cardUnsafe : ''}`}>
                 <div className={styles.cardHeader}>
-                  <span className={styles.name}>{s.name}</span>
+                  <span className={styles.name}>
+                    {s.name}
+                    {s.recentChange > 0 && <span className={styles.arriving}>+{s.recentChange.toLocaleString()} arriving</span>}
+                    {s.recentChange < 0 && <span className={styles.leaving}>{s.recentChange.toLocaleString()} leaving</span>}
+                  </span>
                   <span className={styles.badge} style={{ backgroundColor: `${barColor}15`, color: barColor }}>
                     {s.unsafe ? '⚠️ Unsafe' : `${pct}% Full`}
                   </span>

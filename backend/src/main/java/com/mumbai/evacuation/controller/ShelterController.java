@@ -2,6 +2,7 @@ package com.mumbai.evacuation.controller;
 
 import com.mumbai.evacuation.disaster.HazardOverlay;
 import com.mumbai.evacuation.model.Shelter;
+import com.mumbai.evacuation.service.DemoArrivalService;
 import com.mumbai.evacuation.service.GraphService;
 import com.mumbai.evacuation.service.ShelterService;
 import jakarta.validation.Valid;
@@ -21,22 +22,44 @@ public class ShelterController {
 
     private final ShelterService shelterService;
     private final GraphService graphService;
+    private final DemoArrivalService demoArrivalService;
 
     public record CapacityUpdate(@NotNull @Min(1) Integer totalCapacity) {}
     public record OccupancyUpdate(@NotNull @Min(0) Integer currentOccupancy) {}
+    public record DemoToggle(@NotNull Boolean enabled) {}
 
-    public ShelterController(ShelterService shelterService, GraphService graphService) {
+    public ShelterController(ShelterService shelterService, GraphService graphService,
+                             DemoArrivalService demoArrivalService) {
         this.shelterService = shelterService;
         this.graphService = graphService;
+        this.demoArrivalService = demoArrivalService;
     }
 
     @GetMapping
     public List<Map<String, Object>> getAllShelters() {
         HazardOverlay overlay = graphService.getHazardOverlay();
-        return shelterService.getAllShelters().stream().map(s -> shelterToMap(s, overlay)).toList();
+        Map<Long, Integer> change = demoArrivalService.getLastTickChange();
+        return shelterService.getAllShelters().stream().map(s -> {
+            Map<String, Object> m = shelterToMap(s, overlay);
+            m.put("recentChange", change.getOrDefault(s.getId(), 0));
+            return m;
+        }).toList();
     }
 
-    @GetMapping("/{id}")
+    /** GET /api/shelters/demo — demo-mode status (people still waiting / unplaced). */
+    @GetMapping("/demo")
+    public Map<String, Object> demoStatus() {
+        return demoArrivalService.status();
+    }
+
+    /** POST /api/shelters/demo {enabled} — switch simulated arrivals on/off (operator). */
+    @PostMapping("/demo")
+    public Map<String, Object> setDemo(@Valid @RequestBody DemoToggle body) {
+        demoArrivalService.setEnabled(body.enabled());
+        return demoArrivalService.status();
+    }
+
+    @GetMapping("/{id:\\d+}")
     public Map<String, Object> getShelter(@PathVariable long id) {
         return shelterToMap(find(id), graphService.getHazardOverlay());
     }

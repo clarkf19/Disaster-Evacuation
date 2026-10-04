@@ -3,7 +3,7 @@ package com.mumbai.evacuation.controller;
 import com.mumbai.evacuation.config.AdminTokenInterceptor;
 import com.mumbai.evacuation.dto.RouteRequest;
 import com.mumbai.evacuation.dto.RouteResponse;
-import com.mumbai.evacuation.service.EmergencyChatbotService;
+import com.mumbai.evacuation.service.DemoArrivalService;
 import com.mumbai.evacuation.service.GraphService;
 import com.mumbai.evacuation.service.ShelterService;
 import com.mumbai.evacuation.service.TomTomService;
@@ -23,13 +23,15 @@ public class RouteController {
     private final ShelterService shelterService;
     private final TomTomService tomTomService;
     private final AdminTokenInterceptor adminTokenInterceptor;
+    private final DemoArrivalService demoArrivalService;
 
     public RouteController(GraphService graphService, ShelterService shelterService, TomTomService tomTomService,
-                           AdminTokenInterceptor adminTokenInterceptor) {
+                           AdminTokenInterceptor adminTokenInterceptor, DemoArrivalService demoArrivalService) {
         this.graphService = graphService;
         this.shelterService = shelterService;
         this.tomTomService = tomTomService;
         this.adminTokenInterceptor = adminTokenInterceptor;
+        this.demoArrivalService = demoArrivalService;
     }
 
     /** POST /api/route — node-to-node route on the road graph under the live hazard overlay. */
@@ -71,6 +73,7 @@ public class RouteController {
         cfg.put("operatorTokenRequired", adminTokenInterceptor.isRequired());
         cfg.put("shelterDataVerified", shelterService.isDataVerified());
         cfg.put("coverageBounds", graphService.getGraph().getBounds());
+        cfg.put("demoMode", demoArrivalService.isEnabled());
         return cfg;
     }
 }
