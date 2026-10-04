@@ -205,4 +205,4 @@ cd frontend && npm test
 ---
 
 ## 📜 Acknowledgements
-Road data © OpenStreetMap contributors (via OSMnx). Geocoding by Komoot Photon and Nominatim. Map tiles © CARTO. Optional live traffic by TomTom, AI by Google Gemini.
+Road, rail and school data © OpenStreetMap contributors. Elevation: Copernicus DEM GLO-30. Geocoding by Komoot Photon and Nominatim. Map tiles © OpenStreetMap. Optional live traffic by TomTom, AI by Google Gemini.

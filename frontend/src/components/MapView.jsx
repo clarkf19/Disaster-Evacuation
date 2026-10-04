@@ -236,10 +236,10 @@ export default function MapView({
       maxBoundsViscosity={0.8}
       preferCanvas
     >
+      {/* Standard OpenStreetMap tiles: free, no API key (CARTO basemaps now require one). */}
       <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-        subdomains="abcd"
+        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         maxZoom={19}
       />
 
