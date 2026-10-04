@@ -2,55 +2,51 @@ package com.mumbai.evacuation.dto;
 
 import com.mumbai.evacuation.model.EvacuationStrategy;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.List;
 
 /**
- * Data Transfer Object containing side-by-side benchmark comparison results
- * between Strategy 1 (Naive Nearest Baseline) and Strategy 2 (Capacity-Aware Engine).
+ * Results of evacuation simulations. All records are plain data so they
+ * serialise directly to JSON for the Command Centre UI.
  */
-public class EvacuationBenchmarkResult {
+public final class EvacuationBenchmarkResult {
 
-    public static class StrategyMetrics {
-        public EvacuationStrategy strategy;
-        public int totalEvacuees;
-        public int evacueesSuccessfullyHoused;
-        public int overflowEvacuees;
-        public double avgEvacuationTimeMinutes;
-        public double maxEvacuationTimeMinutes;
-        public double avgTravelDistanceKm;
-        public double totalTravelDistanceKm;
-        public double shelterUtilizationPercent;
-        public double averageRoadCongestionFactor;
-        public long executionTimeMs;
-        public Map<String, Integer> shelterOccupancies = new LinkedHashMap<>();
-    }
+    private EvacuationBenchmarkResult() {}
 
-    private String scenarioName;
-    private StrategyMetrics naiveStrategyMetrics;
-    private StrategyMetrics capacityAwareStrategyMetrics;
+    public record Comparison(ScenarioSummary scenario, StrategyMetrics naive, StrategyMetrics capacityAware) {}
 
-    public String getScenarioName() {
-        return scenarioName;
-    }
+    public record ScenarioSummary(String id, String name, String description,
+                                  List<DisasterView> disasters, List<GroupInput> groups,
+                                  List<Long> unsafeShelterIds, double personsPerVehicle, double evacuationWindowHours) {}
 
-    public void setScenarioName(String scenarioName) {
-        this.scenarioName = scenarioName;
-    }
+    public record DisasterView(String id, String type, double lat, double lon, double radiusMeters,
+                               boolean blockRoads, double congestionMultiplier, String description) {}
 
-    public StrategyMetrics getNaiveStrategyMetrics() {
-        return naiveStrategyMetrics;
-    }
+    public record GroupInput(String id, String name, double lat, double lon, int count, String wardName,
+                             boolean insideHazardZone) {}
 
-    public void setNaiveStrategyMetrics(StrategyMetrics naiveStrategyMetrics) {
-        this.naiveStrategyMetrics = naiveStrategyMetrics;
-    }
+    public record StrategyMetrics(
+            EvacuationStrategy strategy,
+            int totalEvacuees,
+            int evacueesHoused,
+            int overflowEvacuees,
+            int unreachableEvacuees,
+            double avgEvacuationTimeMinutes,   // person-weighted, housed evacuees only
+            double maxEvacuationTimeMinutes,
+            double avgTravelDistanceKm,        // person-weighted, housed evacuees only
+            double shelterUtilizationPercent,  // housed / capacity of usable shelters
+            int sheltersOverCapacity,          // shelters that had to turn people away
+            double congestedRoadKm,            // km of road at congestion factor >= 1.7
+            int reroutedAllocations,
+            long executionTimeMs,
+            List<ShelterLoad> shelters,
+            List<Allocation> allocations,
+            List<GroupOutcome> groups) {}
 
-    public StrategyMetrics getCapacityAwareStrategyMetrics() {
-        return capacityAwareStrategyMetrics;
-    }
+    public record ShelterLoad(long id, String name, int capacity, int arrivals, int housed, boolean unsafe) {}
 
-    public void setCapacityAwareStrategyMetrics(StrategyMetrics capacityAwareStrategyMetrics) {
-        this.capacityAwareStrategyMetrics = capacityAwareStrategyMetrics;
-    }
+    public record Allocation(String groupId, String groupName, long shelterId, String shelterName,
+                             int persons, int housed, double travelTimeMinutes, double distanceKm,
+                             boolean rerouted, List<double[]> route) {}
+
+    public record GroupOutcome(String id, String name, int count, int housed, int overflow, String status) {}
 }

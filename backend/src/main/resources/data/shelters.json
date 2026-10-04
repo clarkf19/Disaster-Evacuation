@@ -1,0 +1,28 @@
+{
+  "_note": "Shelter sites and capacities are PLACEHOLDERS chosen by the project team and have NOT been verified against the official BMC / MCGM disaster-management shelter list. Replace with official data before any real-world use. Set floodProne=true for low-lying sites so they are excluded while a FLOOD is active.",
+  "verified": false,
+  "shelters": [
+    { "id": 1,  "name": "Wankhede Stadium (Churchgate)",          "lat": 18.9389, "lon": 72.8258, "capacity": 25000, "floodProne": false },
+    { "id": 2,  "name": "Brabourne Stadium (Marine Drive)",       "lat": 18.9328, "lon": 72.8242, "capacity": 20000, "floodProne": false },
+    { "id": 3,  "name": "Azad Maidan Ground (CST)",               "lat": 18.9412, "lon": 72.8315, "capacity": 15000, "floodProne": false },
+    { "id": 4,  "name": "Cross Maidan (Churchgate)",              "lat": 18.9378, "lon": 72.8302, "capacity": 12000, "floodProne": false },
+    { "id": 5,  "name": "Oval Maidan (Colaba)",                   "lat": 18.9295, "lon": 72.8288, "capacity": 10000, "floodProne": false },
+    { "id": 6,  "name": "Cooperage Football Ground (Colaba)",     "lat": 18.9215, "lon": 72.8270, "capacity": 8000,  "floodProne": false },
+    { "id": 7,  "name": "Byculla Zoo Grounds (Byculla)",          "lat": 18.9780, "lon": 72.8350, "capacity": 15000, "floodProne": false },
+    { "id": 8,  "name": "Shivaji Park (Dadar)",                   "lat": 19.0269, "lon": 72.8381, "capacity": 30000, "floodProne": false },
+    { "id": 9,  "name": "Worli Seaface Sports Complex",           "lat": 19.0125, "lon": 72.8160, "capacity": 10000, "floodProne": false },
+    { "id": 10, "name": "Mahim Nature Park",                      "lat": 19.0435, "lon": 72.8552, "capacity": 12000, "floodProne": false },
+    { "id": 11, "name": "BKC Exhibition Ground (Bandra E)",       "lat": 19.0665, "lon": 72.8680, "capacity": 35000, "floodProne": false },
+    { "id": 12, "name": "MIG Cricket Club Ground (Bandra W)",     "lat": 19.0580, "lon": 72.8320, "capacity": 10000, "floodProne": false },
+    { "id": 13, "name": "Sion Fort Grounds (Sion)",               "lat": 19.0420, "lon": 72.8630, "capacity": 8000,  "floodProne": false },
+    { "id": 14, "name": "Kurla Sports Complex Ground",            "lat": 19.0680, "lon": 72.8820, "capacity": 15000, "floodProne": false },
+    { "id": 15, "name": "Chembur Gymkhana (Chembur)",             "lat": 19.0610, "lon": 72.9010, "capacity": 12000, "floodProne": false },
+    { "id": 16, "name": "Andheri Sports Complex (Andheri W)",     "lat": 19.1310, "lon": 72.8350, "capacity": 25000, "floodProne": false },
+    { "id": 17, "name": "JVPD Grounds (Juhu)",                    "lat": 19.1080, "lon": 72.8270, "capacity": 15000, "floodProne": false },
+    { "id": 18, "name": "Goregaon Sports Club (Goregaon W)",      "lat": 19.1680, "lon": 72.8390, "capacity": 20000, "floodProne": false },
+    { "id": 19, "name": "IIT Bombay Gymnasium Grounds (Powai)",   "lat": 19.1330, "lon": 72.9150, "capacity": 18000, "floodProne": false },
+    { "id": 20, "name": "Vikhroli Ground",                        "lat": 19.1120, "lon": 72.9300, "capacity": 10000, "floodProne": false },
+    { "id": 21, "name": "Borivali National Park Arena",           "lat": 19.2310, "lon": 72.8620, "capacity": 25000, "floodProne": false },
+    { "id": 22, "name": "Thane Stadium Grounds",                  "lat": 19.1880, "lon": 72.9650, "capacity": 20000, "floodProne": false }
+  ]
+}

@@ -1,29 +1,71 @@
 spring:
   application:
     name: mumbai-evacuation-system
+  config:
+    # Lets local development pick up keys from the repo-root .env (or backend/.env).
+    # Real environment variables always take precedence.
+    import: "optional:file:../.env[.properties],optional:file:.env[.properties]"
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
       - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+  jackson:
+    mapper:
+      accept-case-insensitive-enums: true
 
 server:
   port: ${PORT:8080}
+  # Render / Vercel sit in front of the app; trust their X-Forwarded-* headers.
+  forward-headers-strategy: framework
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
 
 logging:
   level:
     com.mumbai: INFO
 
-# TomTom Routing API — key stored securely on backend only, never exposed to frontend
+# Road network and shelters (classpath by default; use file:/path/... to override)
+graph:
+  nodes-resource: ${GRAPH_NODES_RESOURCE:classpath:data/mumbai_nodes.csv}
+  edges-resource: ${GRAPH_EDGES_RESOURCE:classpath:data/mumbai_edges.csv}
+  shelters-resource: ${SHELTERS_RESOURCE:classpath:data/shelters.json}
+
+# Evacuation traffic model: persons -> vehicles/hour on each road
+evacuation:
+  persons-per-vehicle: ${EVAC_PERSONS_PER_VEHICLE:4}
+  window-hours: ${EVAC_WINDOW_HOURS:3}
+
+# Operator token protecting disaster / shelter mutations. Leave empty only for local development.
+security:
+  admin-token: ${ADMIN_TOKEN:}
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+
+ratelimit:
+  enabled: ${RATE_LIMIT_ENABLED:true}
+
+# TomTom live traffic — key stays on the backend only
 tomtom:
   api:
     key: ${TOMTOM_API_KEY:}
     routing-base-url: https://api.tomtom.com/routing/1/calculateRoute
     geocode-base-url: https://api.tomtom.com/search/2/reverseGeocode
+    search-base-url: https://api.tomtom.com/search/2/search
 
-# Emergency AI Assistant LLM configuration
+geocoding:
+  user-agent: ${GEOCODING_USER_AGENT:MumbaiDisasterEvacuationSystem/1.1 (student project)}
+
+# Emergency AI assistant (Google Gemini). Model names change over time — override with GEMINI_MODEL.
 llm:
-  provider: ${LLM_PROVIDER:gemini}
   api-key: ${GEMINI_API_KEY:}
-  gemini-model: gemini-1.5-flash
-
+  gemini-model: ${GEMINI_MODEL:gemini-2.5-flash}

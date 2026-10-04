@@ -1,38 +1,20 @@
 package com.mumbai.evacuation.dto;
 
-public class DisasterRequest {
-    private String id;
-    private String type;  // FLOOD, FIRE, BRIDGE_COLLAPSE, CHEMICAL_LEAK
-    private double latitude;
-    private double longitude;
-    private double radiusMeters;
-    private boolean blockRoads;
-    private double congestionMultiplier;
-    private String description;
+import com.mumbai.evacuation.disaster.DisasterType;
+import jakarta.validation.constraints.*;
 
-    public DisasterRequest() {}
-
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
-
-    public String getType() { return type; }
-    public void setType(String type) { this.type = type; }
-
-    public double getLatitude() { return latitude; }
-    public void setLatitude(double latitude) { this.latitude = latitude; }
-
-    public double getLongitude() { return longitude; }
-    public void setLongitude(double longitude) { this.longitude = longitude; }
-
-    public double getRadiusMeters() { return radiusMeters; }
-    public void setRadiusMeters(double radiusMeters) { this.radiusMeters = radiusMeters; }
-
-    public boolean isBlockRoads() { return blockRoads; }
-    public void setBlockRoads(boolean blockRoads) { this.blockRoads = blockRoads; }
-
-    public double getCongestionMultiplier() { return congestionMultiplier; }
-    public void setCongestionMultiplier(double congestionMultiplier) { this.congestionMultiplier = congestionMultiplier; }
-
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+/**
+ * Request to inject a disaster. Coordinates must fall inside the wider Mumbai
+ * region; radius is limited to 50 m – 10 km; the congestion multiplier (used
+ * when roads are not fully blocked) to 1–10x.
+ */
+public record DisasterRequest(
+        @Size(max = 64) @Pattern(regexp = "[A-Za-z0-9_-]*", message = "may only contain letters, digits, '-' and '_'") String id,
+        @NotNull DisasterType type,
+        @NotNull @DecimalMin(MumbaiBounds.MIN_LAT) @DecimalMax(MumbaiBounds.MAX_LAT) Double latitude,
+        @NotNull @DecimalMin(MumbaiBounds.MIN_LON) @DecimalMax(MumbaiBounds.MAX_LON) Double longitude,
+        @NotNull @DecimalMin("50") @DecimalMax("10000") Double radiusMeters,
+        boolean blockRoads,
+        @DecimalMin("1.0") @DecimalMax("10.0") Double congestionMultiplier,
+        @Size(max = 200) String description) {
 }

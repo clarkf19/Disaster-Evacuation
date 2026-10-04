@@ -3,26 +3,22 @@ package com.mumbai.evacuation.controller;
 import com.mumbai.evacuation.dto.ChatRequest;
 import com.mumbai.evacuation.dto.ChatResponse;
 import com.mumbai.evacuation.service.EmergencyChatbotService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * REST Controller for the Emergency AI Safety Chatbot.
- *
- * Endpoint: POST /api/chat
- */
+/** POST /api/chat — Emergency AI safety assistant (rate limited). */
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "*")
 public class ChatbotController {
 
-    @Autowired
-    private EmergencyChatbotService chatbotService;
+    private final EmergencyChatbotService chatbotService;
+
+    public ChatbotController(EmergencyChatbotService chatbotService) {
+        this.chatbotService = chatbotService;
+    }
 
     @PostMapping("/chat")
-    public ResponseEntity<ChatResponse> chat(@RequestBody ChatRequest request) {
-        ChatResponse response = chatbotService.processChatQuery(request);
-        return ResponseEntity.ok(response);
+    public ChatResponse chat(@Valid @RequestBody ChatRequest request) {
+        return chatbotService.processChatQuery(request);
     }
 }

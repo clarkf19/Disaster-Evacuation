@@ -1,78 +1,82 @@
 package com.mumbai.evacuation.controller;
 
+import com.mumbai.evacuation.disaster.HazardOverlay;
 import com.mumbai.evacuation.model.Shelter;
 import com.mumbai.evacuation.service.GraphService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
+import com.mumbai.evacuation.service.ShelterService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
 
 /**
- * REST controller for shelter listing and nearest-shelter routing.
+ * Shelters with live occupancy. Reads are public; capacity/occupancy updates
+ * require the operator token.
  */
 @RestController
 @RequestMapping("/api/shelters")
-@CrossOrigin(origins = "*")
 public class ShelterController {
 
-    @Autowired
-    private GraphService graphService;
+    private final ShelterService shelterService;
+    private final GraphService graphService;
 
-    /** GET /api/shelters — list all shelters with capacity */
+    public record CapacityUpdate(@NotNull @Min(1) Integer totalCapacity) {}
+    public record OccupancyUpdate(@NotNull @Min(0) Integer currentOccupancy) {}
+
+    public ShelterController(ShelterService shelterService, GraphService graphService) {
+        this.shelterService = shelterService;
+        this.graphService = graphService;
+    }
+
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> getAllShelters() {
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (Shelter s : graphService.getShelterService().getAllShelters()) {
-            result.add(shelterToMap(s));
-        }
-        return ResponseEntity.ok(result);
+    public List<Map<String, Object>> getAllShelters() {
+        HazardOverlay overlay = graphService.getHazardOverlay();
+        return shelterService.getAllShelters().stream().map(s -> shelterToMap(s, overlay)).toList();
     }
 
-    /** GET /api/shelters/{id} — single shelter detail */
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getShelter(@PathVariable long id) {
-        Shelter s = graphService.getShelterService().getShelter(id);
-        if (s == null) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok(shelterToMap(s));
+    public Map<String, Object> getShelter(@PathVariable long id) {
+        return shelterToMap(find(id), graphService.getHazardOverlay());
     }
 
-    /** POST /api/shelters/{id}/capacity — update capacity */
     @PostMapping("/{id}/capacity")
-    public ResponseEntity<Map<String, Object>> updateCapacity(
-            @PathVariable long id, @RequestBody Map<String, Integer> body) {
-        Shelter s = graphService.getShelterService().getShelter(id);
-        if (s == null) return ResponseEntity.notFound().build();
-        if (body.containsKey("totalCapacity")) {
-            s.setTotalCapacity(body.get("totalCapacity"));
-        }
-        Map<String, Object> resp = new LinkedHashMap<>();
-        resp.put("status", "CAPACITY_UPDATED");
-        resp.put("shelterId", id);
-        resp.put("newCapacity", s.getTotalCapacity());
-        return ResponseEntity.ok(resp);
+    public Map<String, Object> updateCapacity(@PathVariable long id, @Valid @RequestBody CapacityUpdate body) {
+        Shelter s = find(id);
+        s.setTotalCapacity(body.totalCapacity());
+        return shelterToMap(s, graphService.getHazardOverlay());
     }
 
-    /** POST /api/shelters/reset — reset all occupancies */
+    @PostMapping("/{id}/occupancy")
+    public Map<String, Object> updateOccupancy(@PathVariable long id, @Valid @RequestBody OccupancyUpdate body) {
+        Shelter s = find(id);
+        s.setCurrentOccupancy(body.currentOccupancy());
+        return shelterToMap(s, graphService.getHazardOverlay());
+    }
+
     @PostMapping("/reset")
-    public ResponseEntity<Map<String, Object>> resetAll() {
-        graphService.getShelterService().getAllShelters().forEach(Shelter::resetOccupancy);
-        Map<String, Object> resp = new LinkedHashMap<>();
-        resp.put("status", "ALL_OCCUPANCIES_RESET");
-        return ResponseEntity.ok(resp);
+    public Map<String, Object> resetAll() {
+        shelterService.getAllShelters().forEach(Shelter::resetOccupancy);
+        return Map.of("status", "ALL_OCCUPANCIES_RESET");
     }
 
-    private Map<String, Object> shelterToMap(Shelter s) {
+    private Shelter find(long id) {
+        return shelterService.getShelter(id).orElseThrow(() -> new NoSuchElementException("No shelter with id " + id));
+    }
+
+    private static Map<String, Object> shelterToMap(Shelter s, HazardOverlay overlay) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", s.getId());
         m.put("name", s.getName());
         m.put("lat", s.getLatitude());
         m.put("lon", s.getLongitude());
-        m.put("nearestNodeId", s.getNearestNodeId());
         m.put("totalCapacity", s.getTotalCapacity());
         m.put("currentOccupancy", s.getCurrentOccupancy());
         m.put("remainingCapacity", s.getRemainingCapacity());
         m.put("isFull", s.isFull());
+        m.put("floodProne", s.isFloodProne());
+        m.put("unsafe", overlay.isShelterUnsafe(s));
         return m;
     }
 }
