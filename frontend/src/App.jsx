@@ -11,6 +11,10 @@ import styles from './App.module.css';
 
 const POLL_MS = 20_000;
 const FAST_POLL_MS = 4_000;
+/** While the backend is unreachable (e.g. a free-tier server waking up), retry quickly. */
+const WAKE_POLL_MS = 3_000;
+/** How long to call it "waking up" before calling it "offline". */
+const WAKE_GRACE_MS = 120_000;
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('route');
@@ -50,30 +54,38 @@ export default function App() {
     noticeTimer.current = setTimeout(() => setNotice(null), 7000);
   }, []);
 
+  // When the backend first became unreachable (null while it is reachable).
+  const [failingSince, setFailingSince] = useState(null);
+
   const refreshLiveData = useCallback(async () => {
     try {
-      const [cfg, shelterData, disasterData] = await Promise.all([
-        API.getConfig(), API.getAllShelters(), API.listDisasters(),
-      ]);
-      setConfig(cfg);
-      setShelters(shelterData || []);
-      setDisasters(disasterData || []);
+      // One round trip for everything the UI polls.
+      const live = await API.getLiveData();
+      setConfig(live.config);
+      setShelters(live.shelters || []);
+      setDisasters(live.disasters || []);
+      setStations(live.stations || []);
       setOnline(true);
-      // Station open/closed status depends on live hazards; failures here are non-critical.
-      API.getRailStations().then(setStations).catch(() => {});
+      setFailingSince(null);
     } catch {
       setOnline(false);
+      setFailingSince(since => since ?? Date.now());
     }
   }, []);
 
+  // Hotspots never change at runtime: load once the backend is reachable.
   useEffect(() => {
-    API.getFloodHotspots().then(d => setHotspots(d.hotspots || [])).catch(() => {});
-  }, []);
+    if (online && hotspots.length === 0) {
+      API.getFloodHotspots().then(d => setHotspots(d.hotspots || [])).catch(() => {});
+    }
+  }, [online, hotspots.length]);
 
-  // Poll fast while demo mode is moving people (hazards active, or shelters still emptying).
+  // Poll fast while demo mode is moving people (hazards active, or shelters still emptying),
+  // and very fast while the server is waking up so data appears as soon as it is ready.
   const sheltersChanging = config?.demoMode
     && (disasters.length > 0 || shelters.some(s => s.currentOccupancy > 0));
-  const pollMs = sheltersChanging ? FAST_POLL_MS : POLL_MS;
+  const pollMs = online === false ? WAKE_POLL_MS : sheltersChanging ? FAST_POLL_MS : POLL_MS;
+  const wakingUp = online === false && failingSince != null && Date.now() - failingSince < WAKE_GRACE_MS;
 
   useEffect(() => {
     refreshLiveData();
@@ -181,7 +193,9 @@ export default function App() {
     setActiveTab('route');
   }
 
-  const statusLabel = online === false ? 'Offline' : online ? (config?.liveTrafficEnabled ? 'Live traffic' : 'Online') : 'Connecting';
+  const statusLabel = wakingUp ? 'Waking up'
+    : online === false ? 'Offline'
+    : online ? (config?.liveTrafficEnabled ? 'Live traffic' : 'Online') : 'Connecting';
 
   return (
     <div className={styles.appContainer}>
@@ -196,15 +210,21 @@ export default function App() {
             </div>
           </div>
           <div
-            className={`${styles.liveBadge} ${online === false ? styles.offlineBadge : ''}`}
-            title={online === false ? 'Cannot reach the backend server' : 'Backend reachable'}
+            className={`${styles.liveBadge} ${wakingUp ? styles.wakingBadge : online === false ? styles.offlineBadge : ''}`}
+            title={online === false ? 'Cannot reach the backend server yet' : 'Backend reachable'}
           >
             <span className={styles.liveDot} />
             {statusLabel}
           </div>
         </div>
 
-        {online === false && (
+        {wakingUp && (
+          <div className={styles.wakingBanner} role="status">
+            <span className={styles.wakingSpinner} aria-hidden="true" />
+            Waking up the server — this can take up to a minute after a quiet period. The page will fill in automatically.
+          </div>
+        )}
+        {online === false && !wakingUp && (
           <div className={styles.offlineBanner} role="alert">
             Server unreachable — showing last known data. In a life-threatening emergency call <b>112</b> or BMC <b>1916</b>.
           </div>

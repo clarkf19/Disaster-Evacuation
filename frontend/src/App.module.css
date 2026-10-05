@@ -214,6 +214,39 @@
   animation: none;
 }
 
+.wakingBadge {
+  color: #92400e;
+  background: #fef3c7;
+}
+.wakingBadge .liveDot {
+  background: #f59e0b;
+}
+
+.wakingBanner {
+  padding: 8px 20px;
+  font-size: 0.78rem;
+  background: #fef3c7;
+  color: #78350f;
+  border-bottom: 1px solid #fde68a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wakingSpinner {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #f59e0b;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: wakeSpin 0.8s linear infinite;
+}
+
+@keyframes wakeSpin {
+  to { transform: rotate(360deg); }
+}
+
 .offlineBanner {
   padding: 8px 20px;
   font-size: 0.78rem;

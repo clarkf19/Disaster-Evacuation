@@ -61,8 +61,14 @@ All third-party calls (TomTom, Photon, Nominatim, Gemini) go through the backend
 3. **Command Centre**: run the *Western Suburbs* stress test and compare the strategies on the map.
 4. **Search**: type a place name. Suggestions come from `/api/search`.
 
+## ⚡ Latency
+- **Render's free tier sleeps** after 15 minutes without traffic, and waking takes 30–60 s. The repo includes `.github/workflows/keep-alive.yml`, which pings `/actuator/health` every 10 minutes so the backend stays warm (free for public repos; check the **Actions** tab that it runs). If your Render URL differs, set a repository variable `BACKEND_URL` (Settings → Secrets and variables → Actions → Variables). An external pinger such as UptimeRobot (5-minute interval) is an even more punctual alternative.
+- **Region:** create the Render service in **Singapore** — it is the closest Render region to Mumbai, and every API call is faster than from a US region.
+- **Startup:** the Docker image unpacks the jar and ships a Class Data Sharing archive created by a training start, which roughly halves JVM/Spring start-up on a single CPU.
+- **Polling:** the UI fetches everything it needs from one `GET /api/live` call and retries every 3 s (showing "Waking up") while the server starts.
+
 ## 💡 Notes
-- **Render free tier** sleeps after 15 minutes of inactivity, and the first request can take ~1 minute. The UI shows "Offline" until the backend responds.
+- If the backend was asleep, the first visit shows "Waking up" for up to about a minute, then fills in automatically.
 - **Rate limits** are per client IP (`X-Forwarded-For`). Set `RATE_LIMIT_ENABLED=false` only for load testing.
 - Live hazards and shelter occupancy are stored in memory and reset when the service restarts.
 - **Memory:** the full network (≈95k road nodes, 216k segments, residential streets included) runs the whole API test suite within a 300 MB heap, so it fits the free 512 MB instance (the Dockerfile caps the heap at 75 % of the container). If you run out of memory anyway, rebuild a lighter graph with `python scripts/build_datasets.py --no-residential` and redeploy.

@@ -36,32 +36,29 @@ public final class CsvGraphLoader {
                              InputStream stationsCsv, InputStream linksCsv) throws IOException {
         Graph graph = new Graph();
 
-        for (Row r : read(nodesCsv, "nodes")) {
-            graph.addNode(new Node(r.longValue("id"), r.doubleValue("latitude"), r.doubleValue("longitude"),
-                    r.optionalDouble("elevation_m"), null, false));
-        }
-        for (Row r : read(edgesCsv, "edges")) {
+        forEachRow(nodesCsv, "nodes", r -> graph.addNode(new Node(r.longValue("id"), r.doubleValue("latitude"),
+                r.doubleValue("longitude"), r.optionalDouble("elevation_m"), null, false)));
+
+        Map<String, String> roadTypes = new HashMap<>(); // share one String per road type
+        forEachRow(edgesCsv, "edges", r -> {
             long source = r.longValue("source");
             long target = r.longValue("destination");
             if (graph.getNode(source) == null || graph.getNode(target) == null) {
                 throw r.error("edge references unknown node");
             }
+            String roadType = roadTypes.computeIfAbsent(r.text("road_type"), t -> t);
             graph.addEdge(new Edge(r.longValue("id"), source, target, r.doubleValue("distance_meters"),
-                    r.text("road_type"), r.doubleValue("speed_limit_kmh"), (int) r.longValue("capacity")));
-        }
+                    roadType, r.doubleValue("speed_limit_kmh"), (int) r.longValue("capacity")));
+        });
         graph.addWalkingReverseEdges();
 
         if (stationsCsv != null && linksCsv != null) {
             List<Node> stations = new ArrayList<>();
-            for (Row r : read(stationsCsv, "rail_stations")) {
-                stations.add(new Node(STATION_ID_BASE - r.longValue("id"), r.doubleValue("latitude"),
-                        r.doubleValue("longitude"), r.optionalDouble("elevation_m"), r.text("name"), true));
-            }
+            forEachRow(stationsCsv, "rail_stations", r -> stations.add(new Node(STATION_ID_BASE - r.longValue("id"),
+                    r.doubleValue("latitude"), r.doubleValue("longitude"), r.optionalDouble("elevation_m"), r.text("name"), true)));
             List<Graph.RailLink> links = new ArrayList<>();
-            for (Row r : read(linksCsv, "rail_links")) {
-                links.add(new Graph.RailLink(STATION_ID_BASE - r.longValue("from_station"),
-                        STATION_ID_BASE - r.longValue("to_station"), r.text("line"), r.doubleValue("distance_meters")));
-            }
+            forEachRow(linksCsv, "rail_links", r -> links.add(new Graph.RailLink(STATION_ID_BASE - r.longValue("from_station"),
+                    STATION_ID_BASE - r.longValue("to_station"), r.text("line"), r.doubleValue("distance_meters"))));
             graph.addRailNetwork(stations, links);
         }
         return graph;
@@ -69,9 +66,9 @@ public final class CsvGraphLoader {
 
     // ---- minimal CSV reading (quoted fields supported, no embedded newlines) ----
 
-    private static List<Row> read(InputStream in, String label) throws IOException {
-        List<Row> rows = new ArrayList<>();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+    /** Streams rows to {@code consumer} without holding the whole file in memory. */
+    private static void forEachRow(InputStream in, String label, java.util.function.Consumer<Row> consumer) throws IOException {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8), 1 << 16)) {
             String headerLine = reader.readLine();
             if (headerLine == null) throw new IOException(label + " CSV is empty");
             Map<String, Integer> header = new HashMap<>();
@@ -81,13 +78,23 @@ public final class CsvGraphLoader {
             int lineNo = 1;
             while ((line = reader.readLine()) != null) {
                 lineNo++;
-                if (!line.isBlank()) rows.add(new Row(label, lineNo, header, split(line)));
+                if (!line.isBlank()) consumer.accept(new Row(label, lineNo, header, split(line)));
             }
         }
-        return rows;
     }
 
     static List<String> split(String line) {
+        if (line.indexOf('"') < 0) {
+            // Fast path: no quoting on this line (all node/edge rows).
+            List<String> out = new ArrayList<>(8);
+            int start = 0, comma;
+            while ((comma = line.indexOf(',', start)) >= 0) {
+                out.add(line.substring(start, comma));
+                start = comma + 1;
+            }
+            out.add(line.substring(start));
+            return out;
+        }
         List<String> out = new ArrayList<>();
         StringBuilder cur = new StringBuilder();
         boolean quoted = false;

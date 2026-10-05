@@ -56,6 +56,29 @@ async function request(path, { method = 'GET', body, operator = false } = {}) {
 // --- App config & health ---
 export const getConfig = () => request('/config');
 
+/**
+ * Everything the UI polls in one round trip: { config, shelters, disasters, stations }.
+ * Falls back to separate calls if the backend predates /api/live, and tolerates a
+ * failing optional call instead of discarding everything.
+ */
+export async function getLiveData() {
+  try {
+    return await request('/live');
+  } catch (e) {
+    if (e.status !== 404) throw e;
+  }
+  const [config, shelters, disasters, stations] = await Promise.allSettled([
+    request('/config'), request('/shelters'), request('/disasters'), request('/rail/stations'),
+  ]);
+  if (shelters.status === 'rejected') throw shelters.reason; // backend really unreachable
+  return {
+    config: config.status === 'fulfilled' ? config.value : null,
+    shelters: shelters.value,
+    disasters: disasters.status === 'fulfilled' ? disasters.value : [],
+    stations: stations.status === 'fulfilled' ? stations.value : [],
+  };
+}
+
 // --- Shelters ---
 export const getAllShelters = () => request('/shelters');
 export const setDemoMode    = (enabled) => request('/shelters/demo', { method: 'POST', body: { enabled }, operator: true });

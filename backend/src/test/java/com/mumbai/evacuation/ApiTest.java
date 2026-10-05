@@ -178,6 +178,15 @@ class ApiTest {
     }
 
     @Test
+    void liveEndpointBundlesEverythingTheUiPolls() throws Exception {
+        mvc.perform(get("/api/live")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.config.coverageBounds").isArray())
+                .andExpect(jsonPath("$.shelters.length()").value(org.hamcrest.Matchers.greaterThan(50)))
+                .andExpect(jsonPath("$.disasters").isArray())
+                .andExpect(jsonPath("$.stations.length()").value(org.hamcrest.Matchers.greaterThan(20)));
+    }
+
+    @Test
     void configAndHealthAreExposed() throws Exception {
         mvc.perform(get("/api/config")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.operatorTokenRequired").value(true))
