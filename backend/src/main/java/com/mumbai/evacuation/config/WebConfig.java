@@ -11,8 +11,10 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  *
  * In production the Vercel frontend proxies /api to the backend (same origin
  * from the browser's point of view), and in development Vite does the same, so
- * CORS is only needed for clients calling the backend directly. Allowed origins
- * are configurable via CORS_ALLOWED_ORIGINS (comma-separated).
+ * CORS is only needed for clients calling the backend directly. The browser still
+ * sends its Origin header through the Vercel rewrite, though, so the Vercel domains
+ * must be allowed or every POST is refused with 403. Allowed origin patterns are
+ * configurable via CORS_ALLOWED_ORIGINS (comma-separated, wildcards allowed).
  */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
@@ -21,7 +23,7 @@ public class WebConfig implements WebMvcConfigurer {
     private final String[] allowedOrigins;
 
     public WebConfig(AdminTokenInterceptor adminTokenInterceptor,
-                     @Value("${app.cors.allowed-origins:http://localhost:5173}") String[] allowedOrigins) {
+                     @Value("${app.cors.allowed-origins:http://localhost:*,https://*.vercel.app}") String[] allowedOrigins) {
         this.adminTokenInterceptor = adminTokenInterceptor;
         this.allowedOrigins = allowedOrigins;
     }
@@ -29,7 +31,7 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOrigins(allowedOrigins)
+                .allowedOriginPatterns(allowedOrigins)
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("Content-Type", AdminTokenInterceptor.HEADER);
     }

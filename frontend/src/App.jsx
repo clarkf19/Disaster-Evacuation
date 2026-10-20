@@ -251,12 +251,18 @@ export default function App() {
               <p className={styles.subtitle}>Hazard-aware evacuation planning</p>
             </div>
           </div>
+          <div className={styles.headerRight}>
+          {operatorRequired && config && !operatorMode && (
+            <button className={styles.lockBtn} onClick={() => setLoginOpen(true)}
+                    title="Operator login" aria-label="Operator login">🔒</button>
+          )}
           <div
             className={`${styles.liveBadge} ${wakingUp ? styles.wakingBadge : online === false ? styles.offlineBadge : ''}`}
             title={online === false ? 'Cannot reach the backend server yet' : 'Backend reachable'}
           >
             <span className={styles.liveDot} />
             {statusLabel}
+          </div>
           </div>
         </div>
 
@@ -294,19 +300,10 @@ export default function App() {
           </div>
         </div>
 
-        {operatorRequired && config && (
-          <div className={`${styles.operatorBar} ${operatorMode ? styles.operatorOn : ''}`}>
-            {operatorMode ? (
-              <>
-                <span>🔓 <b>Operator mode</b> — you can change live hazards and run drills</span>
-                <button className={styles.operatorBtn} onClick={logoutOperator}>Log out</button>
-              </>
-            ) : (
-              <>
-                <span>👁️ Viewer mode — live hazards and drills are for operators</span>
-                <button className={styles.operatorBtn} onClick={() => setLoginOpen(true)}>🔒 Operator login</button>
-              </>
-            )}
+        {operatorRequired && operatorMode && (
+          <div className={`${styles.operatorBar} ${styles.operatorOn}`}>
+            <span>🔓 <b>Operator mode</b> — you can change live hazards and run drills</span>
+            <button className={styles.operatorBtn} onClick={logoutOperator}>Log out</button>
           </div>
         )}
 

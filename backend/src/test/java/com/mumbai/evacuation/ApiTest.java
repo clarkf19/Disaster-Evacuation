@@ -228,4 +228,16 @@ class ApiTest {
         assertEquals("Dadar", trains.get(0).path("toName").asText());
         assertEquals(trains.get(0).path("stops").asInt() + 1, trains.get(0).path("stations").size());
     }
+
+    @Test
+    void requestsForwardedFromTheVercelSiteAreAccepted() throws Exception {
+        // Vercel's rewrite passes the browser's Origin header on; POSTs from the site must not get 403.
+        String body = "{\"fromLat\":19.0178,\"fromLon\":72.8478,\"toLat\":19.0650,\"toLon\":72.8790}";
+        mvc.perform(post("/api/live-route").header("Origin", "https://disaster-evacuation.vercel.app")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/live-route").header("Origin", "https://evil.example.com")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+    }
 }
