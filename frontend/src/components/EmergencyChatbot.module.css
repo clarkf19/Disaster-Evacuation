@@ -444,3 +444,28 @@
   0%, 80%, 100% { transform: scale(0); }
   40% { transform: scale(1.0); }
 }
+
+/* Phones: the map sits on top and the form scrolls under it, so the launcher
+   shrinks to a round icon at the map's corner instead of covering form fields. */
+@media (max-width: 768px) {
+  .floatingContainer {
+    top: calc(42vh - 64px);
+    bottom: auto;
+    right: 12px;
+  }
+  .triggerBtn {
+    padding: 12px;
+  }
+  .triggerText,
+  .pulseDot {
+    display: none;
+  }
+  .chatWindow {
+    position: fixed;
+    inset: 12px;
+    width: auto;
+    max-width: none;
+    height: auto;
+    max-height: none;
+  }
+}
