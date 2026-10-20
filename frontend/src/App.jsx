@@ -5,6 +5,7 @@ import DisasterPanel from './components/DisasterPanel';
 import ShelterPanel from './components/ShelterPanel';
 import CommandCentre from './components/CommandCentre';
 import EmergencyChatbot from './components/EmergencyChatbot';
+import ErrorBoundary from './components/ErrorBoundary';
 import { calcLiveRoute, reverseGeocode } from './services/routingApi';
 import * as API from './services/backendApi';
 import styles from './App.module.css';
@@ -266,59 +267,61 @@ export default function App() {
         </nav>
 
         <div className={styles.tabContent}>
-          {activeTab === 'route' && (
-            <RoutePlanner
-              clickMode={clickMode}
-              setClickMode={setClickMode}
-              source={source}
-              dest={dest}
-              onClear={handleClearRoute}
-              onCompute={() => computeRoute(source, dest, travelMode)}
-              travelMode={travelMode}
-              onTravelModeChange={(m) => {
-                setTravelMode(m);
-                if (routeResult && source && dest) computeRoute(source, dest, m);
-              }}
-              loading={routeLoading}
-              error={routeError}
-              onSourceSet={handleSourceSet}
-              onDestSet={handleDestSet}
-              routeResult={routeResult}
-              shelters={shelters}
-            />
-          )}
-          {activeTab === 'disasters' && (
-            <DisasterPanel
-              disasters={disasters}
-              operatorTokenRequired={config?.operatorTokenRequired}
-              onDisastersChange={refreshLiveData}
-              onPlaceMode={handleStartDisasterPlace}
-              onError={showNotice}
-            />
-          )}
-          {activeTab === 'shelters' && (
-            <ShelterPanel
-              shelters={shelters}
-              origin={source}
-              dataVerified={config?.shelterDataVerified}
-              demoMode={config?.demoMode}
-              hazardsActive={disasters.length > 0}
-              onToggleDemo={async (enabled) => {
-                try {
-                  await API.setDemoMode(enabled);
-                } catch (e) {
-                  showNotice(e.status === 401
-                    ? 'Operator token required — enter it in the Hazards tab.'
-                    : `Could not change demo mode: ${e.message}`);
-                }
-                refreshLiveData();
-              }}
-              onSelectShelter={handleSelectShelter}
-            />
-          )}
-          {activeTab === 'command' && (
-            <CommandCentre simulation={simulation} onSimulationChange={setSimulation} />
-          )}
+          <ErrorBoundary>
+            {activeTab === 'route' && (
+              <RoutePlanner
+                clickMode={clickMode}
+                setClickMode={setClickMode}
+                source={source}
+                dest={dest}
+                onClear={handleClearRoute}
+                onCompute={() => computeRoute(source, dest, travelMode)}
+                travelMode={travelMode}
+                onTravelModeChange={(m) => {
+                  setTravelMode(m);
+                  if (routeResult && source && dest) computeRoute(source, dest, m);
+                }}
+                loading={routeLoading}
+                error={routeError}
+                onSourceSet={handleSourceSet}
+                onDestSet={handleDestSet}
+                routeResult={routeResult}
+                shelters={shelters}
+              />
+            )}
+            {activeTab === 'disasters' && (
+              <DisasterPanel
+                disasters={disasters}
+                operatorTokenRequired={config?.operatorTokenRequired}
+                onDisastersChange={refreshLiveData}
+                onPlaceMode={handleStartDisasterPlace}
+                onError={showNotice}
+              />
+            )}
+            {activeTab === 'shelters' && (
+              <ShelterPanel
+                shelters={shelters}
+                origin={source}
+                dataVerified={config?.shelterDataVerified}
+                demoMode={config?.demoMode}
+                hazardsActive={disasters.length > 0}
+                onToggleDemo={async (enabled) => {
+                  try {
+                    await API.setDemoMode(enabled);
+                  } catch (e) {
+                    showNotice(e.status === 401
+                      ? 'Operator token required — enter it in the Hazards tab.'
+                      : `Could not change demo mode: ${e.message}`);
+                  }
+                  refreshLiveData();
+                }}
+                onSelectShelter={handleSelectShelter}
+              />
+            )}
+            {activeTab === 'command' && (
+              <CommandCentre simulation={simulation} onSimulationChange={setSimulation} />
+            )}
+          </ErrorBoundary>
         </div>
       </aside>
 

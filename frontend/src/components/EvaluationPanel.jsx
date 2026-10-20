@@ -118,12 +118,14 @@ export default function EvaluationPanel({ scenarioId, params }) {
 }
 
 function fmt(stat) {
-  return `${stat.mean.toLocaleString()} ± ${stat.ci95.toLocaleString()}`;
+  if (!stat) return '—';
+  return `${stat.mean != null ? stat.mean.toLocaleString() : '0'} ± ${stat.ci95 != null ? stat.ci95.toLocaleString() : '0'}`;
 }
 
 function MonteCarloTable({ result }) {
-  const naive = result.metrics.NAIVE_NEAREST;
-  const aware = result.metrics.CAPACITY_AWARE;
+  const naive = result?.metrics?.NAIVE_NEAREST;
+  const aware = result?.metrics?.CAPACITY_AWARE;
+  if (!naive || !aware) return null;
   return (
     <>
       <table className={styles.table}>
@@ -132,14 +134,15 @@ function MonteCarloTable({ result }) {
         </thead>
         <tbody>
           {METRICS.map(m => {
-            const a = naive[m.key], b = aware[m.key];
+            const a = naive[m.key] || { mean: 0, ci95: 0, std: 0 };
+            const b = aware[m.key] || { mean: 0, ci95: 0, std: 0 };
             // Highlight only when the confidence intervals don't overlap.
             const separated = Math.abs(a.mean - b.mean) > a.ci95 + b.ci95;
             const awareWins = separated && (m.better === 'higher' ? b.mean > a.mean : b.mean < a.mean);
             const naiveWins = separated && !awareWins;
             return (
               <tr key={m.key}>
-                <td>{m.label}<br /><small>sd {a.std} / {b.std}</small></td>
+                <td>{m.label}<br /><small>sd {a.std ?? '—'} / {b.std ?? '—'}</small></td>
                 <td className={naiveWins ? styles.better : ''}>{fmt(a)}</td>
                 <td className={awareWins ? styles.better : ''}>{fmt(b)}</td>
               </tr>
@@ -148,8 +151,8 @@ function MonteCarloTable({ result }) {
         </tbody>
       </table>
       <p className={styles.note}>
-        Capacity-aware housed at least as many people as naive in <b>{result.capacityAwareWinRate}%</b> of {result.runs} runs.
-        Bold = difference larger than both confidence intervals. Took {(result.executionTimeMs / 1000).toFixed(1)} s.
+        Capacity-aware housed at least as many people as naive in <b>{result.capacityAwareWinRate ?? '—'}%</b> of {result.runs ?? 0} runs.
+        Bold = difference larger than both confidence intervals. Took {((result.executionTimeMs ?? 0) / 1000).toFixed(1)} s.
       </p>
       <button className={styles.btnGhost} onClick={() => downloadCsv(result)}>⬇ Download per-run CSV</button>
     </>
@@ -171,8 +174,9 @@ function downloadCsv(result) {
 
 /** Line chart (inline SVG) of one metric vs. the swept parameter, with 95% CI error bars. */
 function SensitivityChart({ result, metric }) {
+  const points = result?.points || [];
+  if (points.length === 0) return null;
   const W = 360, H = 200, pad = { l: 44, r: 12, t: 12, b: 34 };
-  const points = result.points;
   const xs = points.map(p => p.value);
   const series = ['NAIVE_NEAREST', 'CAPACITY_AWARE'].map(s => ({
     strategy: s,

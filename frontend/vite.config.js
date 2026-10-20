@@ -9,8 +9,9 @@ export default defineConfig({
       // Same-origin /api in development, mirroring the Vercel rewrite in production.
       // All third-party services (TomTom, Photon, Nominatim, Gemini) are called by the backend.
       '/api': {
-        target: 'http://localhost:8080',
+        target: process.env.BACKEND_URL || 'https://mumbai-evac-backend.onrender.com',
         changeOrigin: true,
+        secure: false,
       },
     },
   },

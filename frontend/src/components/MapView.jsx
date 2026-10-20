@@ -98,8 +98,12 @@ function BoundsController({ routeResult, simulation }) {
   }, [routeResult, map]);
   useEffect(() => {
     const pts = [];
-    simulation?.comparison?.scenario?.groups?.forEach(g => pts.push([g.lat, g.lon]));
-    currentStrategy(simulation)?.allocations?.forEach(a => a.route?.length && pts.push(a.route[a.route.length - 1]));
+    simulation?.comparison?.scenario?.groups?.forEach(g => {
+      if (g && g.lat != null && g.lon != null) pts.push([g.lat, g.lon]);
+    });
+    currentStrategy(simulation)?.allocations?.forEach(a => {
+      if (a?.route?.length) pts.push(a.route[a.route.length - 1]);
+    });
     if (pts.length > 1) map.fitBounds(L.latLngBounds(pts), { padding: [60, 60] });
   }, [simulation, map]);
   return null;
@@ -111,19 +115,20 @@ function currentStrategy(simulation) {
 }
 
 function HazardZone({ d, dashed = false }) {
+  if (!d || d.lat == null || d.lon == null) return null;
   const color = d.blockRoads ? '#ea4335' : '#f59e0b';
   return (
     <>
       <Circle
         center={[d.lat, d.lon]}
-        radius={d.radiusMeters}
+        radius={d.radiusMeters || 800}
         pathOptions={{ color, fillColor: color, fillOpacity: dashed ? 0.12 : 0.25, weight: 2.5, dashArray: dashed ? '6 6' : undefined }}
       />
       <Marker position={[d.lat, d.lon]} icon={disasterIcon(d.type)}>
         <Popup>
-          <div className="popup-title">{DISASTER_EMOJI[d.type] || '⚠️'} {d.type.replace('_', ' ')}{dashed ? ' (simulated)' : ''}</div>
+          <div className="popup-title">{DISASTER_EMOJI[d.type] || '⚠️'} {(d.type || 'HAZARD').replace('_', ' ')}{dashed ? ' (simulated)' : ''}</div>
           {d.description && <div className="popup-sub">{d.description}</div>}
-          <div className="popup-sub">Impact radius: {Math.round(d.radiusMeters)} m</div>
+          <div className="popup-sub">Impact radius: {Math.round(d.radiusMeters || 800)} m</div>
           <div className="popup-sub">
             Roads: <b style={{ color: d.blockRoads ? '#ea4335' : '#c2410c' }}>{d.blockRoads ? 'BLOCKED (exit allowed)' : 'CONGESTED'}</b>
           </div>
@@ -139,38 +144,44 @@ function SimulationLayer({ simulation }) {
   const shelterColors = useMemo(() => {
     const colors = new Map();
     metrics?.allocations?.forEach(a => {
-      if (!colors.has(a.shelterId)) colors.set(a.shelterId, SIM_PALETTE[colors.size % SIM_PALETTE.length]);
+      if (a?.shelterId && !colors.has(a.shelterId)) {
+        colors.set(a.shelterId, SIM_PALETTE[colors.size % SIM_PALETTE.length]);
+      }
     });
     return colors;
   }, [metrics]);
 
   if (!scenario || !metrics) return null;
-  const outcomes = new Map(metrics.groups.map(g => [g.id, g]));
+  const outcomes = new Map((metrics.groups || []).map(g => [g.id, g]));
 
   return (
     <>
-      {scenario.disasters.map(d => <HazardZone key={`sim-${d.id}`} d={d} dashed />)}
-      {metrics.allocations.map((a, i) => (
-        <Polyline
-          key={`alloc-${i}`}
-          positions={a.route}
-          pathOptions={{ color: shelterColors.get(a.shelterId), weight: 5, opacity: 0.85, dashArray: a.housed < a.persons ? '8 6' : undefined }}
-        >
-          <Tooltip sticky>
-            {a.groupName} → {a.shelterName}: {a.persons.toLocaleString()} people, {a.travelTimeMinutes} min
-            {a.housed < a.persons ? ` — ${(a.persons - a.housed).toLocaleString()} turned away` : ''}
-            {a.rerouted ? ' (re-routed)' : ''}
-          </Tooltip>
-        </Polyline>
-      ))}
-      {scenario.groups.map(g => {
+      {(scenario.disasters || []).map(d => d ? <HazardZone key={`sim-${d.id}`} d={d} dashed /> : null)}
+      {(metrics.allocations || []).map((a, i) => {
+        if (!a?.route?.length) return null;
+        return (
+          <Polyline
+            key={`alloc-${i}`}
+            positions={a.route}
+            pathOptions={{ color: shelterColors.get(a.shelterId) || '#1a73e8', weight: 5, opacity: 0.85, dashArray: (a.housed ?? 0) < (a.persons ?? 0) ? '8 6' : undefined }}
+          >
+            <Tooltip sticky>
+              {a.groupName} → {a.shelterName}: {a.persons != null ? a.persons.toLocaleString() : 0} people, {a.travelTimeMinutes ?? 0} min
+              {(a.housed ?? 0) < (a.persons ?? 0) ? ` — ${((a.persons ?? 0) - (a.housed ?? 0)).toLocaleString()} turned away` : ''}
+              {a.rerouted ? ' (re-routed)' : ''}
+            </Tooltip>
+          </Polyline>
+        );
+      })}
+      {(scenario.groups || []).map(g => {
+        if (!g || g.lat == null || g.lon == null) return null;
         const o = outcomes.get(g.id);
-        const color = !o ? '#64748b' : o.overflow === 0 ? '#16a34a' : o.housed > 0 ? '#f97316' : '#dc2626';
+        const color = !o ? '#64748b' : (o.overflow ?? 0) === 0 ? '#16a34a' : (o.housed ?? 0) > 0 ? '#f97316' : '#dc2626';
         return (
           <CircleMarker key={`grp-${g.id}`} center={[g.lat, g.lon]} radius={9}
                         pathOptions={{ color: '#fff', weight: 2, fillColor: color, fillOpacity: 1 }}>
             <Tooltip>
-              {g.name}: {g.count.toLocaleString()} people{o ? ` — ${o.status.toLowerCase()}` : ''}
+              {g.name}: {g.count != null ? g.count.toLocaleString() : 0} people{o ? ` — ${(o.status || '').toLowerCase()}` : ''}
             </Tooltip>
           </CircleMarker>
         );
