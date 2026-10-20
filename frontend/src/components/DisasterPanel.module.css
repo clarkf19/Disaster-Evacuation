@@ -171,3 +171,37 @@
   font-size: 0.74rem;
   color: var(--text-secondary);
 }
+
+.lockedCard {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 8px 0 4px;
+  font-size: 0.8rem;
+  color: #7c2d12;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lockedCard p {
+  margin: 0;
+}
+
+.btnUnlock {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: none;
+  background: #c2410c;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.removeBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}

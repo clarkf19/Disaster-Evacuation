@@ -31,9 +31,15 @@ public class RouteResponse {
 
     /**
      * One step of the itinerary.
-     * type: DRIVE | WALK | WAIT (for a train) | TRAIN; line/fromName/toName are set for TRAIN legs.
+     * type: DRIVE | WALK | WAIT (for a train) | CHANGE (to another line) | TRAIN.
+     * TRAIN: line, fromName (board) and toName (get off), stations = every station passed, in order.
+     * WAIT / CHANGE: fromName = the station. WALK: fromName / toName = the station walked from / to, if any.
      */
-    public record Leg(String type, String line, String fromName, String toName, double minutes, double distanceKm, int stops) {}
+    public record Leg(String type, String line, String fromName, String toName, double minutes, double distanceKm,
+                      int stops, List<Stop> stations) {}
+
+    /** A station on a train leg. */
+    public record Stop(String name, double lat, double lon) {}
 
     public boolean isPathFound() { return pathFound; }
     public void setPathFound(boolean pathFound) { this.pathFound = pathFound; }

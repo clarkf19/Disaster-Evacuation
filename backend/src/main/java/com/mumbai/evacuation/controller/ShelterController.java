@@ -59,6 +59,18 @@ public class ShelterController {
         return demoArrivalService.status();
     }
 
+    /** POST /api/shelters/demo/drill — start an evacuation drill from every monsoon flooding spot (operator). */
+    @PostMapping("/demo/drill")
+    public Map<String, Object> startDrill() {
+        return demoArrivalService.startDrill();
+    }
+
+    /** DELETE /api/shelters/demo/drill — end the drill; shelters empty over the next minute (operator). */
+    @DeleteMapping("/demo/drill")
+    public Map<String, Object> stopDrill() {
+        return demoArrivalService.stopDrill();
+    }
+
     @GetMapping("/{id:\\d+}")
     public Map<String, Object> getShelter(@PathVariable long id) {
         return shelterToMap(find(id), graphService.getHazardOverlay());

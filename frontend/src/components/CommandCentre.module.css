@@ -253,3 +253,27 @@
   padding: 1px 7px;
   white-space: nowrap;
 }
+
+.verdict {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  font-size: 0.8rem;
+  color: #064e3b;
+  line-height: 1.45;
+}
+
+.verdictSub {
+  margin-top: 4px;
+  font-size: 0.74rem;
+  color: #065f46;
+}
+
+.mapKey {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin: 8px 0;
+  line-height: 1.45;
+}

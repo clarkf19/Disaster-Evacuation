@@ -9,7 +9,12 @@ function distanceKm(a, b) {
   return Math.sqrt(dLat * dLat + dLon * dLon);
 }
 
-export default function ShelterPanel({ shelters, origin, dataVerified, demoMode, hazardsActive, onToggleDemo, onSelectShelter }) {
+const fullness = s => (s.totalCapacity ? s.currentOccupancy / s.totalCapacity : 0);
+
+export default function ShelterPanel({
+  shelters, origin, dataVerified, demoMode, demo, hazardsActive, operatorMode, onLogin,
+  onToggleDemo, onStartDrill, onStopDrill, destinationShelterId, onPlanRoute, onSelectShelter,
+}) {
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(PAGE);
   const q = query.trim().toLowerCase();
@@ -17,7 +22,7 @@ export default function ShelterPanel({ shelters, origin, dataVerified, demoMode,
     .filter(s => !q || s.name.toLowerCase().includes(q))
     .map(s => ({ ...s, km: origin ? distanceKm(origin, s) : null }))
     .sort((a, b) => (a.unsafe - b.unsafe)
-      || (origin ? a.km - b.km : (b.currentOccupancy - a.currentOccupancy) || a.name.localeCompare(b.name)));
+      || (origin ? a.km - b.km : (fullness(b) - fullness(a)) || a.name.localeCompare(b.name)));
   const totalPeople = shelters.reduce((sum, s) => sum + (s.currentOccupancy || 0), 0);
   const arrivingNow = shelters.reduce((sum, s) => sum + Math.max(0, s.recentChange || 0), 0);
 
@@ -37,25 +42,18 @@ export default function ShelterPanel({ shelters, origin, dataVerified, demoMode,
       </div>
 
       {demoMode !== undefined && (
-        <div className={`${styles.demoBanner} ${demoMode ? styles.demoOn : ''}`}>
-          <div>
-            <b>{demoMode ? '🎬 Demo mode: simulated arrivals' : 'Demo mode is off'}</b>
-            <p>
-              {!demoMode
-                ? 'Occupancy changes only when operators update it.'
-                : hazardsActive
-                  ? `People from active hazard zones are heading to the nearest safe shelters${arrivingNow ? ` (+${arrivingNow.toLocaleString()} just arrived)` : ''}.`
-                  : totalPeople > 0
-                    ? 'No active hazards — shelters are emptying as people return home.'
-                    : 'Place a hazard zone in the Hazards tab and watch shelters fill up.'}
-            </p>
-          </div>
-          {onToggleDemo && (
-            <button className={styles.demoToggle} onClick={() => onToggleDemo(!demoMode)}>
-              {demoMode ? 'Turn off' : 'Turn on'}
-            </button>
-          )}
-        </div>
+        <OccupancyCard
+          demoMode={demoMode}
+          demo={demo}
+          hazardsActive={hazardsActive}
+          totalPeople={totalPeople}
+          arrivingNow={arrivingNow}
+          operatorMode={operatorMode}
+          onLogin={onLogin}
+          onToggleDemo={onToggleDemo}
+          onStartDrill={onStartDrill}
+          onStopDrill={onStopDrill}
+        />
       )}
 
       <div className={styles.searchRow}>
@@ -111,7 +109,11 @@ export default function ShelterPanel({ shelters, origin, dataVerified, demoMode,
                     ? 'Open-air assembly ground — not used during floods'
                     : s.floodProne ? 'Low-lying / flood-prone — not used during floods' : 'Municipal school · capacity estimated'}
                 </p>
-                {onSelectShelter && (
+                {onSelectShelter && (destinationShelterId === s.id ? (
+                  <button className={`${styles.navBtn} ${styles.navBtnSet}`} onClick={onPlanRoute}>
+                    ✓ Destination set — plan the route →
+                  </button>
+                ) : (
                   <button
                     className={styles.navBtn}
                     onClick={() => onSelectShelter(s)}
@@ -119,7 +121,7 @@ export default function ShelterPanel({ shelters, origin, dataVerified, demoMode,
                   >
                     {s.unsafe ? 'Unavailable — inside hazard zone' : s.isFull ? 'Full' : '📍 Set as Evacuation Destination'}
                   </button>
-                )}
+                ))}
               </div>
             );
           })
@@ -130,6 +132,69 @@ export default function ShelterPanel({ shelters, origin, dataVerified, demoMode,
           </button>
         )}
         {shelters.length > 0 && sorted.length === 0 && <p className={styles.empty}>No shelter matches “{query}”.</p>}
+      </div>
+    </div>
+  );
+}
+
+/** Live occupancy explanation, counters and the operator's drill / demo controls. */
+function OccupancyCard({
+  demoMode, demo, hazardsActive, totalPeople, arrivingNow, operatorMode, onLogin,
+  onToggleDemo, onStartDrill, onStopDrill,
+}) {
+  const [busy, setBusy] = useState(false);
+  const phase = demo?.drill?.phase || 'NONE';
+  const drilling = phase !== 'NONE';
+  const act = fn => async () => { setBusy(true); await fn(); setBusy(false); };
+
+  let title, text;
+  if (!demoMode) {
+    title = 'Demo mode is off';
+    text = 'Occupancy changes only when operators update it.';
+  } else if (phase === 'ARRIVING') {
+    title = '🚨 Evacuation drill in progress';
+    text = `${demo.drill.evacuees.toLocaleString()} residents from ${demo.drill.origins} monsoon flooding spots are heading to their nearest safe shelters${arrivingNow ? ` (+${arrivingNow.toLocaleString()} just arrived)` : ''}.`;
+  } else if (phase === 'SHELTERED') {
+    title = '🏁 Drill: everyone has arrived';
+    text = 'Shelters stay occupied for about a minute and a half, then people go home.';
+  } else if (hazardsActive) {
+    title = '🎬 Simulated arrivals';
+    text = `People from active hazard zones are heading to the nearest safe shelters${arrivingNow ? ` (+${arrivingNow.toLocaleString()} just arrived)` : ''}.`;
+  } else if (totalPeople > 0) {
+    title = '🎬 Simulated arrivals';
+    text = 'No active hazards — shelters are emptying as people return home.';
+  } else {
+    title = '🎬 Simulated occupancy (demo)';
+    text = 'Run an evacuation drill to watch shelters fill up, or place a hazard zone in the Hazards tab.';
+  }
+
+  return (
+    <div className={`${styles.demoBanner} ${demoMode ? styles.demoOn : ''}`}>
+      <div className={styles.demoText}>
+        <b>{title}</b>
+        <p>{text}</p>
+        {demoMode && (totalPeople > 0 || drilling) && (
+          <p className={styles.demoStats}>
+            <span><b>{totalPeople.toLocaleString()}</b> sheltered</span>
+            {demo?.waiting > 0 && <span><b>{demo.waiting.toLocaleString()}</b> on the way</span>}
+            {demo?.unplaced > 0 && <span><b>{demo.unplaced.toLocaleString()}</b> turned away</span>}
+          </p>
+        )}
+        <p className={styles.demoNote}>Simulated for demonstration — not real check-in data.</p>
+      </div>
+      <div className={styles.demoActions}>
+        {operatorMode ? (
+          <>
+            {drilling
+              ? <button className={styles.drillBtn} onClick={act(onStopDrill)} disabled={busy}>■ End drill</button>
+              : <button className={styles.drillBtn} onClick={act(onStartDrill)} disabled={busy}>▶ Run evacuation drill</button>}
+            <button className={styles.demoToggle} onClick={act(() => onToggleDemo(!demoMode))} disabled={busy}>
+              {demoMode ? 'Turn demo off' : 'Turn demo on'}
+            </button>
+          </>
+        ) : (
+          <button className={styles.demoToggle} onClick={onLogin}>🔒 Operator login to run a drill</button>
+        )}
       </div>
     </div>
   );

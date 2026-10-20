@@ -20,6 +20,10 @@ jobs:
       - name: Ping /actuator/health
         env:
           BACKEND_URL: ${{ vars.BACKEND_URL || 'https://mumbai-evac-backend.onrender.com' }}
+        # A wrong answer (e.g. 404 from an old deployment without /actuator/health) fails the run,
+        # so a stale or broken backend shows up as a red X in the Actions tab.
         run: |
-          curl -sS -m 150 -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" "$BACKEND_URL/actuator/health" \
-            || echo "Backend did not answer (it may still be waking up)"
+          code=$(curl -sS -m 150 -o /dev/null -w "%{http_code}" "$BACKEND_URL/actuator/health" || echo "000")
+          echo "Backend answered HTTP $code"
+          if [ "$code" = "000" ]; then echo "No answer (it may still be waking up)"; exit 0; fi
+          if [ "$code" != "200" ]; then echo "::error::Backend health check returned HTTP $code — is the latest version deployed?"; exit 1; fi

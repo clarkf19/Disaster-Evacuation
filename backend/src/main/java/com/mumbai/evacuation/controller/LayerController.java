@@ -38,12 +38,12 @@ public class LayerController {
         HazardOverlay overlay = graphService.getHazardOverlay();
         List<Map<String, Object>> out = new ArrayList<>();
         for (Node station : graph.getStations()) {
-            Set<String> lines = new TreeSet<>();
+            Set<String> lines = graph.getStationLines(station.getId());
             boolean open = false;
             for (Edge e : graph.getOutgoingEdges(station.getId())) {
-                if (e.getKind() == Edge.Kind.RAIL) lines.add(e.getLine());
-                // A station is usable if people can still get in or out of it.
-                if (e.getKind() == Edge.Kind.TRANSFER && !overlay.isBlocked(e)) open = true;
+                // A station is usable if people can still get in or out of it from the street.
+                boolean toStreet = e.getKind() == Edge.Kind.TRANSFER && !graph.getNode(e.getTargetNodeId()).isStation();
+                if (toStreet && !overlay.isBlocked(e)) open = true;
             }
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", station.getId());

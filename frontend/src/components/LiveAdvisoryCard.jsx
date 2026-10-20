@@ -42,9 +42,7 @@ export default function LiveAdvisoryCard({ result }) {
       )}
 
       {result.found && result.legs?.length > 0 && result.mode !== 'DRIVE' && (
-        <ol className={styles.legs} aria-label="Itinerary">
-          {result.legs.map((leg, i) => <LegItem key={i} leg={leg} />)}
-        </ol>
+        <Itinerary legs={result.legs} />
       )}
 
       {result.found && (
@@ -76,27 +74,68 @@ export default function LiveAdvisoryCard({ result }) {
   );
 }
 
-function LegItem({ leg }) {
+/** Step-by-step directions, each step with its duration and the time elapsed when it ends. */
+function Itinerary({ legs }) {
+  let elapsed = 0;
+  return (
+    <ol className={styles.legs} aria-label="Itinerary">
+      {legs.map((leg, i) => {
+        elapsed += leg.minutes;
+        return <LegItem key={i} leg={leg} isFirst={i === 0} isLast={i === legs.length - 1} elapsed={elapsed} />;
+      })}
+    </ol>
+  );
+}
+
+const km = d => (d < 1 ? `${Math.round(d * 1000)} m` : `${d.toFixed(1)} km`);
+
+function LegItem({ leg, isFirst, isLast, elapsed }) {
   const minutes = `${Math.max(1, Math.round(leg.minutes))} min`;
-  let icon, text;
+  let icon, title, detail = null;
   if (leg.type === 'TRAIN') {
+    const stations = leg.stations || [];
+    const between = stations.slice(1, -1).map(s => s.name);
     icon = '🚆';
-    text = <><b>{leg.line}</b> from {leg.fromName} to <b>{leg.toName}</b> ({leg.stops} stop{leg.stops === 1 ? '' : 's'})</>;
+    title = <><b>{leg.line}</b>: {leg.fromName} → <b>{leg.toName}</b></>;
+    detail = (
+      <>
+        {leg.stops} stop{leg.stops === 1 ? '' : 's'} · {km(leg.distanceKm)} · get off at <b>{leg.toName}</b>
+        {between.length > 0 && (
+          <details className={styles.stopList}>
+            <summary>Stations on the way ({between.length})</summary>
+            {between.join(' · ')}
+          </details>
+        )}
+      </>
+    );
   } else if (leg.type === 'WAIT') {
     icon = '⏱️';
-    text = <>Wait for a train at <b>{leg.fromName}</b></>;
+    title = <>Board the {leg.line ? <b>{leg.line}</b> : 'train'} at <b>{leg.fromName}</b></>;
+    detail = 'Average wait for the next train on the platform';
+  } else if (leg.type === 'CHANGE') {
+    icon = '🔁';
+    title = <>Change to the <b>{leg.line}</b> at <b>{leg.fromName}</b></>;
+    detail = 'Get off, walk to the other platform and wait for the connecting train';
   } else if (leg.type === 'DRIVE') {
     icon = '🚗';
-    text = <>Drive {leg.distanceKm} km</>;
+    title = <>Drive {km(leg.distanceKm)}{isLast ? ' to your destination' : ''}</>;
   } else {
     icon = '🚶';
-    text = <>Walk {leg.distanceKm} km</>;
+    const to = leg.toName ? <> to <b>{leg.toName}</b> station</> : isLast ? ' to your destination' : '';
+    const from = leg.fromName ? <> from {leg.fromName} station</> : isFirst ? ' from your start' : '';
+    title = <>Walk {km(leg.distanceKm)}{from}{to}</>;
   }
   return (
     <li>
       <span aria-hidden="true">{icon}</span>
-      <span>{text}</span>
-      <span>{minutes}</span>
+      <span>
+        {title}
+        {detail && <small className={styles.legDetail}>{detail}</small>}
+      </span>
+      <span className={styles.legTime}>
+        {minutes}
+        <small>at {Math.round(elapsed)} min</small>
+      </span>
     </li>
   );
 }

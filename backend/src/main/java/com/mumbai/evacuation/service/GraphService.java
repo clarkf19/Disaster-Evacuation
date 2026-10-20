@@ -257,44 +257,104 @@ public class GraphService {
         return mode == TravelMode.DRIVE ? "drive" : "walk";
     }
 
-    /** Collapses consecutive edges into itinerary legs (walk / drive / wait / train per line). */
+    /**
+     * Collapses consecutive edges into itinerary legs: walk / drive, wait on the platform, ride one
+     * line, change to another line. A station is a concourse plus one platform per line, so the
+     * edge kinds alone tell the story: concourse → platform is boarding (or a change, right after
+     * a ride), platform → concourse is getting off, and its minute is added to the next step.
+     */
     private List<RouteResponse.Leg> buildLegs(List<Edge> edges, TravelMode mode, EdgeCost cost) {
         List<RouteResponse.Leg> legs = new ArrayList<>();
-        String type = null, line = null, from = null, to = null;
-        double seconds = 0, meters = 0;
-        int stops = 0;
+        LegAccumulator acc = null;
+        double carried = 0; // getting-off time, added to whatever comes next
+        String lastTrainEnd = null;
         for (Edge e : edges) {
-            String t;
-            String l = null;
-            boolean boarding = e.getKind() == Edge.Kind.TRANSFER && graph.getNode(e.getTargetNodeId()).isStation();
-            if (e.getKind() == Edge.Kind.RAIL) { t = "TRAIN"; l = e.getLine(); }
-            else if (boarding) t = "WAIT";
-            else t = mode == TravelMode.DRIVE ? "DRIVE" : "WALK";
+            Node from = graph.getNode(e.getSourceNodeId());
+            Node to = graph.getNode(e.getTargetNodeId());
+            if (e.getKind() == Edge.Kind.TRANSFER && graph.isPlatform(from.getId())) {
+                carried += cost.seconds(e);
+                continue;
+            }
+            String type;
+            String line = null;
+            if (e.getKind() == Edge.Kind.RAIL) {
+                type = "TRAIN";
+                line = e.getLine();
+            } else if (e.getKind() == Edge.Kind.TRANSFER && graph.isPlatform(to.getId())) {
+                boolean change = acc != null && acc.type.equals("TRAIN");
+                type = change ? "CHANGE" : "WAIT";
+                line = edges.stream().filter(x -> x.getSourceNodeId() == to.getId() && x.getKind() == Edge.Kind.RAIL)
+                        .map(Edge::getLine).findFirst().orElse(null);
+            } else {
+                type = mode == TravelMode.DRIVE ? "DRIVE" : "WALK";
+            }
 
-            if (type != null && (!type.equals(t) || !Objects.equals(line, l))) {
-                legs.add(leg(type, line, from, to, seconds, meters, stops));
-                seconds = 0; meters = 0; stops = 0; from = null;
+            if (acc != null && (!acc.type.equals(type) || !Objects.equals(acc.line, line))) {
+                if (acc.type.equals("TRAIN")) lastTrainEnd = acc.to;
+                legs.add(acc.toLeg());
+                acc = null;
             }
-            type = t;
-            line = l;
-            if (t.equals("TRAIN")) {
-                if (from == null) from = graph.getNode(e.getSourceNodeId()).getName();
-                to = graph.getNode(e.getTargetNodeId()).getName();
-                stops++;
-            } else if (t.equals("WAIT")) {
-                from = graph.getNode(e.getTargetNodeId()).getName();
-                to = from;
+            if (acc == null) {
+                acc = new LegAccumulator(type, line);
+                acc.seconds += carried;
+                carried = 0;
             }
-            seconds += cost.seconds(e);
-            if (!t.equals("WAIT")) meters += e.getDistanceMeters();
+            if (type.equals("TRAIN")) {
+                if (acc.stations.isEmpty()) {
+                    acc.from = from.getName();
+                    acc.stations.add(stop(from));
+                }
+                acc.stations.add(stop(to));
+                acc.to = to.getName();
+            } else if (type.equals("WAIT") || type.equals("CHANGE")) {
+                acc.from = acc.to = type.equals("CHANGE") && lastTrainEnd != null ? lastTrainEnd : to.getName();
+            }
+            acc.seconds += cost.seconds(e);
+            if (type.equals("WALK") || type.equals("DRIVE") || type.equals("TRAIN")) acc.meters += e.getDistanceMeters();
         }
-        if (type != null) legs.add(leg(type, line, from, to, seconds, meters, stops));
-        return legs;
+        if (acc != null) {
+            acc.seconds += carried;
+            legs.add(acc.toLeg());
+        }
+        return nameWalkingLegs(legs);
     }
 
-    private static RouteResponse.Leg leg(String type, String line, String from, String to, double seconds, double meters, int stops) {
-        return new RouteResponse.Leg(type, line, from, to, Math.round(seconds / 6.0) / 10.0,
-                Math.round(meters / 10.0) / 100.0, stops);
+    /** Walking legs next to a train say which station they lead to or start from. */
+    private static List<RouteResponse.Leg> nameWalkingLegs(List<RouteResponse.Leg> legs) {
+        List<RouteResponse.Leg> named = new ArrayList<>(legs.size());
+        for (int i = 0; i < legs.size(); i++) {
+            RouteResponse.Leg l = legs.get(i);
+            if (l.type().equals("WALK")) {
+                String from = i > 0 && legs.get(i - 1).type().equals("TRAIN") ? legs.get(i - 1).toName() : null;
+                String to = i + 1 < legs.size() && legs.get(i + 1).type().equals("WAIT") ? legs.get(i + 1).fromName() : null;
+                l = new RouteResponse.Leg(l.type(), l.line(), from, to, l.minutes(), l.distanceKm(), l.stops(), l.stations());
+            }
+            named.add(l);
+        }
+        return named;
+    }
+
+    private static RouteResponse.Stop stop(Node n) {
+        return new RouteResponse.Stop(n.getName(), n.getLatitude(), n.getLongitude());
+    }
+
+    private static final class LegAccumulator {
+        final String type;
+        final String line;
+        String from, to;
+        double seconds, meters;
+        final List<RouteResponse.Stop> stations = new ArrayList<>();
+
+        LegAccumulator(String type, String line) {
+            this.type = type;
+            this.line = line;
+        }
+
+        RouteResponse.Leg toLeg() {
+            int stops = Math.max(0, stations.size() - 1);
+            return new RouteResponse.Leg(type, line, from, to, Math.round(seconds / 6.0) / 10.0,
+                    Math.round(meters / 10.0) / 100.0, stops, List.copyOf(stations));
+        }
     }
 
     private static boolean sameEdges(PathResult a, PathResult b) {

@@ -76,12 +76,32 @@ export async function getLiveData() {
     shelters: shelters.value,
     disasters: disasters.status === 'fulfilled' ? disasters.value : [],
     stations: stations.status === 'fulfilled' ? stations.value : [],
+    demo: null,
   };
+}
+
+/**
+ * Checks an operator token with the server and keeps it only if it is accepted.
+ * Resolves true (accepted) or false (rejected); throws when the server cannot be reached.
+ */
+export async function verifyOperatorToken(token) {
+  const previous = getOperatorToken();
+  setOperatorToken(token.trim());
+  try {
+    await request('/operator/verify', { method: 'POST', operator: true });
+    return true;
+  } catch (e) {
+    setOperatorToken(e.status === 401 ? '' : previous);
+    if (e.status === 401) return false;
+    throw e;
+  }
 }
 
 // --- Shelters ---
 export const getAllShelters = () => request('/shelters');
 export const setDemoMode    = (enabled) => request('/shelters/demo', { method: 'POST', body: { enabled }, operator: true });
+export const startDrill     = () => request('/shelters/demo/drill', { method: 'POST', operator: true });
+export const stopDrill      = () => request('/shelters/demo/drill', { method: 'DELETE', operator: true });
 
 // --- Disasters (mutations need the operator token when the backend requires one) ---
 export const listDisasters     = () => request('/disasters');

@@ -71,8 +71,8 @@ function ModeTable({ naive, aware }) {
           <tr key={m}>
             <td>{MODE_ICON[m] || m}</td>
             <td>{aware?.byMode?.[m]?.persons != null ? aware.byMode[m].persons.toLocaleString() : '—'}</td>
-            <td>{naive?.byMode?.[m]?.avgMinutes ?? '—'}</td>
-            <td>{aware?.byMode?.[m]?.avgMinutes ?? '—'}</td>
+            <td>{fmtNum(naive?.byMode?.[m]?.avgMinutes)}</td>
+            <td>{fmtNum(aware?.byMode?.[m]?.avgMinutes)}</td>
           </tr>
         ))}
       </tbody>
@@ -101,6 +101,7 @@ function normalizeMetrics(m) {
   }
   return {
     strategy: m.strategy || '',
+    totalEvacuees: m.totalEvacuees ?? 0,
     evacueesHoused: m.evacueesHoused ?? m.evacueesSuccessfullyHoused ?? 0,
     overflowEvacuees: m.overflowEvacuees ?? 0,
     avgEvacuationTimeMinutes: m.avgEvacuationTimeMinutes ?? 0,
@@ -225,11 +226,8 @@ export default function CommandCentre({ simulation, onSimulationChange }) {
             {selected.groupCount != null && (
               <> in {selected.groupCount} groups</>
             )}
-            {selected.disasterType && (
-              <> · Hazard: <b>{selected.disasterType.replace('_', ' ')}</b></>
-            )}
-            {selected.radiusMeters != null && (
-              <> ({Math.round(selected.radiusMeters)} m)</>
+            {selected.disasterTypes?.length > 0 && (
+              <> · Hazard: <b>{[...new Set(selected.disasterTypes)].map(t => t.replace('_', ' ').toLowerCase()).join(', ')}</b></>
             )}.
           </p>
         )}
@@ -251,6 +249,7 @@ export default function CommandCentre({ simulation, onSimulationChange }) {
             )}
           </div>
 
+          <Verdict naive={comparison.naive} aware={comparison.capacityAware} />
           <MetricsTable naive={comparison.naive} aware={comparison.capacityAware} />
           <ModeTable naive={comparison.naive} aware={comparison.capacityAware} />
 
@@ -267,6 +266,12 @@ export default function CommandCentre({ simulation, onSimulationChange }) {
               </button>
             ))}
           </div>
+
+          <p className={styles.mapKey}>
+            On the map: dots are evacuee groups (<span style={{ color: '#16a34a' }}>●</span> everyone housed,{' '}
+            <span style={{ color: '#f97316' }}>●</span> partly, <span style={{ color: '#dc2626' }}>●</span> nobody);
+            each route colour is one destination shelter; dashed routes end at a full shelter.
+          </p>
 
           <GroupOutcomes metrics={simulation.strategy === 'naive' ? comparison.naive : comparison.capacityAware} />
 
@@ -320,6 +325,45 @@ export default function CommandCentre({ simulation, onSimulationChange }) {
   );
 }
 
+/** Whole numbers stay whole; others get one decimal. */
+function fmtNum(v) {
+  if (typeof v !== 'number') return '—';
+  return Number.isInteger(v) ? v.toLocaleString() : v.toLocaleString(undefined, { maximumFractionDigits: 1 });
+}
+
+/** "A (1,200), B (800) and 6 more shelters", biggest allocations first. */
+function summariseDestinations(allocations) {
+  const byShelter = new Map();
+  allocations.forEach(a => byShelter.set(a.shelterName, (byShelter.get(a.shelterName) || 0) + (a.persons || 0)));
+  const sorted = [...byShelter.entries()].sort((x, y) => y[1] - x[1]);
+  const shown = sorted.slice(0, 3).map(([name, n]) => `${name} (${n.toLocaleString()})`).join(', ');
+  return sorted.length > 3 ? `${shown} and ${sorted.length - 3} more shelters` : shown;
+}
+
+/** One-sentence conclusion of the comparison, in plain words. */
+function Verdict({ naive, aware }) {
+  const total = aware?.totalEvacuees || naive?.totalEvacuees;
+  if (!total) return null;
+  const pct = v => Math.round((100 * (v || 0)) / total);
+  const extra = (aware.evacueesHoused || 0) - (naive.evacueesHoused || 0);
+  const slower = (aware.avgEvacuationTimeMinutes || 0) - (naive.avgEvacuationTimeMinutes || 0);
+  return (
+    <div className={styles.verdict}>
+      <p>
+        <b>Capacity-aware housed {pct(aware.evacueesHoused)}%</b> of {total.toLocaleString()} evacuees,{' '}
+        the naive plan only <b>{pct(naive.evacueesHoused)}%</b>
+        {extra > 0 && <> — <b>{extra.toLocaleString()} more people</b> get a shelter place</>}.
+      </p>
+      {slower > 1 && (
+        <p className={styles.verdictSub}>
+          The trade-off: their average trip is {Math.round(slower)} min longer, because the nearest shelters
+          fill up and later groups are sent further away instead of being turned away.
+        </p>
+      )}
+    </div>
+  );
+}
+
 const ROWS = [
   ['Evacuees housed', m => m.evacueesHoused, 'higher'],
   ['Turned away / stranded', m => m.overflowEvacuees, 'lower'],
@@ -351,8 +395,8 @@ function MetricsTable({ naive, aware }) {
           return (
             <tr key={label}>
               <td>{label}</td>
-              <td className={naiveWins ? styles.better : ''}>{a != null ? a.toLocaleString() : '—'}</td>
-              <td className={awareWins ? styles.better : ''}>{b != null ? b.toLocaleString() : '—'}</td>
+              <td className={naiveWins ? styles.better : ''}>{fmtNum(a)}</td>
+              <td className={awareWins ? styles.better : ''}>{fmtNum(b)}</td>
             </tr>
           );
         })}
@@ -383,7 +427,7 @@ function GroupOutcomes({ metrics }) {
             </div>
             <span className={styles.groupMeta}>
               {g.housed != null ? g.housed.toLocaleString() : (g.count != null ? g.count.toLocaleString() : 0)} / {g.count != null ? g.count.toLocaleString() : 0} housed
-              {destinations.length > 0 && ` → ${destinations.map(a => `${a.shelterName} (${a.persons != null ? a.persons.toLocaleString() : 0})`).join(', ')}`}
+              {destinations.length > 0 && ` → ${summariseDestinations(destinations)}`}
             </span>
           </li>
         );

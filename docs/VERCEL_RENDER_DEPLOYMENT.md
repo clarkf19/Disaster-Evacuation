@@ -56,10 +56,13 @@ All third-party calls (TomTom, Photon, Nominatim, Gemini) go through the backend
 ---
 
 ## ✅ Verification
-1. **Route planner**: plan a route, place a flood zone across it from the Hazards tab (operator token needed), and the route re-plans around the zone.
-2. **Inside a zone**: set the start point inside a zone. The route leads out of it (status "Leave the Hazard Zone").
-3. **Command Centre**: run the *Western Suburbs* stress test and compare the strategies on the map.
-4. **Search**: type a place name. Suggestions come from `/api/search`.
+0. **Is the latest backend live?** `https://<your-service>.onrender.com/api/config` must return JSON (not a 404). If it 404s, Render is still running an old build: in the Render dashboard open the service → **Manual Deploy → Deploy latest commit**, and check **Settings → Build & Deploy** (branch `main`, root directory `backend`, Auto-Deploy *On Commit*). The keep-alive workflow also fails with a red ❌ when the health check is not `200`.
+1. **Operator login**: click **🔒 Operator login** in the sidebar and paste the `ADMIN_TOKEN`. The bar turns green ("Operator mode").
+2. **Route planner**: plan a route, place a flood zone across it from the Hazards tab, and the route re-plans around the zone. Choose **Train** for a step-by-step itinerary with boarding, changes and stations on the map.
+3. **Shelters**: press **▶ Run evacuation drill** — residents around the 17 monsoon flooding spots head to their nearest shelters, which fill up on the map; after about 90 s they go home.
+4. **Inside a zone**: set the start point inside a zone. The route leads out of it (status "Leave the Hazard Zone").
+5. **Command Centre**: run the *Western Suburbs* stress test and compare the strategies on the map.
+6. **Search**: type a place name. Suggestions come from `/api/search`.
 
 ## ⚡ Latency
 - **Render's free tier sleeps** after 15 minutes without traffic, and waking takes 30–60 s. The repo includes `.github/workflows/keep-alive.yml`, which pings `/actuator/health` every 10 minutes so the backend stays warm (free for public repos; check the **Actions** tab that it runs). If your Render URL differs, set a repository variable `BACKEND_URL` (Settings → Secrets and variables → Actions → Variables). An external pinger such as UptimeRobot (5-minute interval) is an even more punctual alternative.

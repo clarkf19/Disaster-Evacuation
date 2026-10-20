@@ -6,6 +6,7 @@ import ShelterPanel from './components/ShelterPanel';
 import CommandCentre from './components/CommandCentre';
 import EmergencyChatbot from './components/EmergencyChatbot';
 import ErrorBoundary from './components/ErrorBoundary';
+import OperatorLogin from './components/OperatorLogin';
 import { calcLiveRoute, reverseGeocode } from './services/routingApi';
 import * as API from './services/backendApi';
 import styles from './App.module.css';
@@ -31,6 +32,11 @@ export default function App() {
   const [online, setOnline] = useState(null);       // null = checking, true/false after first poll
   const [shelters, setShelters] = useState([]);
   const [disasters, setDisasters] = useState([]);
+  const [demo, setDemo] = useState(null);           // demo-mode / drill status from the server
+
+  // Operator mode: unlocked once the server accepts the operator token
+  const [operatorOk, setOperatorOk] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
 
   // Map layers
   const [hotspots, setHotspots] = useState([]);
@@ -66,6 +72,7 @@ export default function App() {
       setShelters(live.shelters || []);
       setDisasters(live.disasters || []);
       setStations(live.stations || []);
+      setDemo(live.demo || null);
       setOnline(true);
       setFailingSince(null);
     } catch {
@@ -73,6 +80,44 @@ export default function App() {
       setFailingSince(since => since ?? Date.now());
     }
   }, []);
+
+  // A token kept from earlier in this tab is re-checked once the server answers.
+  const operatorChecked = useRef(false);
+  useEffect(() => {
+    if (!online || operatorChecked.current) return;
+    operatorChecked.current = true;
+    if (API.getOperatorToken()) {
+      API.verifyOperatorToken(API.getOperatorToken()).then(setOperatorOk).catch(() => {});
+    }
+  }, [online]);
+
+  const operatorRequired = config?.operatorTokenRequired !== false;
+  const operatorMode = !operatorRequired || operatorOk;
+
+  /** Runs an operator action; a rejected token locks operator mode again and asks to log in. */
+  const runOperatorAction = useCallback(async (action, failureText) => {
+    try {
+      await action();
+      return true;
+    } catch (e) {
+      if (e.status === 401) {
+        setOperatorOk(false);
+        setLoginOpen(true);
+        showNotice('Operator login needed for this action.');
+      } else {
+        showNotice(`${failureText}: ${e.message}`);
+      }
+      return false;
+    } finally {
+      refreshLiveData();
+    }
+  }, [refreshLiveData, showNotice]);
+
+  function logoutOperator() {
+    API.setOperatorToken('');
+    setOperatorOk(false);
+    showNotice('Logged out of operator mode.', 'info');
+  }
 
   // Hotspots never change at runtime: load once the backend is reachable.
   useEffect(() => {
@@ -84,7 +129,7 @@ export default function App() {
   // Poll fast while demo mode is moving people (hazards active, or shelters still emptying),
   // and very fast while the server is waking up so data appears as soon as it is ready.
   const sheltersChanging = config?.demoMode
-    && (disasters.length > 0 || shelters.some(s => s.currentOccupancy > 0));
+    && (disasters.length > 0 || demo?.drill?.active || shelters.some(s => s.currentOccupancy > 0));
   const pollMs = online === false ? WAKE_POLL_MS : sheltersChanging ? FAST_POLL_MS : POLL_MS;
   const wakingUp = online === false && failingSince != null && Date.now() - failingSince < WAKE_GRACE_MS;
 
@@ -138,25 +183,19 @@ export default function App() {
       setDest({ lat, lon, name: await reverseGeocode(lat, lon) });
     } else if (clickMode === 'disaster' && pendingDisasterConfig) {
       const block = pendingDisasterConfig.action === 'block';
-      try {
-        await API.addDisaster({
-          type: pendingDisasterConfig.type,
-          latitude: lat,
-          longitude: lon,
-          radiusMeters: pendingDisasterConfig.radius,
-          blockRoads: block,
-          congestionMultiplier: block ? 1.0 : 3.5,
-          description: `Reported ${pendingDisasterConfig.type.replace('_', ' ').toLowerCase()} hazard`,
-        });
-        await refreshLiveData();
-      } catch (e) {
-        showNotice(e.status === 401
-          ? 'Operator token required to place live disasters — enter it in the Disasters tab.'
-          : `Could not place disaster: ${e.message}`);
-      } finally {
-        setClickMode(null);
-        setPendingDisasterConfig(null);
-      }
+      const config = pendingDisasterConfig;
+      setClickMode(null);
+      setPendingDisasterConfig(null);
+      const placed = await runOperatorAction(() => API.addDisaster({
+        type: config.type,
+        latitude: lat,
+        longitude: lon,
+        radiusMeters: config.radius,
+        blockRoads: block,
+        congestionMultiplier: block ? 1.0 : 3.5,
+        description: `Reported ${config.type.replace('_', ' ').toLowerCase()} hazard`,
+      }), 'Could not place the hazard');
+      if (placed) showNotice('Hazard zone placed — routes now avoid it.', 'info');
     }
   }
 
@@ -190,8 +229,10 @@ export default function App() {
       return;
     }
     const pct = Math.min(100, Math.round((shelter.currentOccupancy / shelter.totalCapacity) * 100));
-    setDest({ lat: shelter.lat, lon: shelter.lon, name: `${shelter.name} (${pct}% full)` });
-    setActiveTab('route');
+    setDest({ lat: shelter.lat, lon: shelter.lon, name: `${shelter.name} (${pct}% full)`, shelterId: shelter.id });
+    showNotice(source
+      ? `✓ ${shelter.name} set as your destination — press Calculate Safe Route.`
+      : `✓ ${shelter.name} set as your destination — now choose your start point.`, 'info');
   }
 
   const statusLabel = wakingUp ? 'Waking up'
@@ -245,7 +286,29 @@ export default function App() {
             </span>
             <span className={styles.kpiLabel}>Hazard zones</span>
           </div>
+          <div className={styles.kpiCard}>
+            <span className={styles.kpiValue}>
+              {shelters.reduce((sum, s) => sum + (s.currentOccupancy || 0), 0).toLocaleString()}
+            </span>
+            <span className={styles.kpiLabel}>People sheltered</span>
+          </div>
         </div>
+
+        {operatorRequired && config && (
+          <div className={`${styles.operatorBar} ${operatorMode ? styles.operatorOn : ''}`}>
+            {operatorMode ? (
+              <>
+                <span>🔓 <b>Operator mode</b> — you can change live hazards and run drills</span>
+                <button className={styles.operatorBtn} onClick={logoutOperator}>Log out</button>
+              </>
+            ) : (
+              <>
+                <span>👁️ Viewer mode — live hazards and drills are for operators</span>
+                <button className={styles.operatorBtn} onClick={() => setLoginOpen(true)}>🔒 Operator login</button>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Navigation Tabs */}
         <nav className={styles.tabNav} aria-label="Sections">
@@ -292,10 +355,10 @@ export default function App() {
             {activeTab === 'disasters' && (
               <DisasterPanel
                 disasters={disasters}
-                operatorTokenRequired={config?.operatorTokenRequired}
-                onDisastersChange={refreshLiveData}
+                operatorMode={operatorMode}
+                onLogin={() => setLoginOpen(true)}
+                runOperatorAction={runOperatorAction}
                 onPlaceMode={handleStartDisasterPlace}
-                onError={showNotice}
               />
             )}
             {activeTab === 'shelters' && (
@@ -304,17 +367,19 @@ export default function App() {
                 origin={source}
                 dataVerified={config?.shelterDataVerified}
                 demoMode={config?.demoMode}
+                demo={demo}
                 hazardsActive={disasters.length > 0}
-                onToggleDemo={async (enabled) => {
-                  try {
-                    await API.setDemoMode(enabled);
-                  } catch (e) {
-                    showNotice(e.status === 401
-                      ? 'Operator token required — enter it in the Hazards tab.'
-                      : `Could not change demo mode: ${e.message}`);
+                operatorMode={operatorMode}
+                onLogin={() => setLoginOpen(true)}
+                onToggleDemo={enabled => runOperatorAction(() => API.setDemoMode(enabled), 'Could not change demo mode')}
+                onStartDrill={async () => {
+                  if (await runOperatorAction(API.startDrill, 'Could not start the drill')) {
+                    showNotice('Evacuation drill started — watch the shelters fill up on the map.', 'info');
                   }
-                  refreshLiveData();
                 }}
+                onStopDrill={() => runOperatorAction(API.stopDrill, 'Could not stop the drill')}
+                destinationShelterId={dest?.shelterId}
+                onPlanRoute={() => setActiveTab('route')}
                 onSelectShelter={handleSelectShelter}
               />
             )}
@@ -363,6 +428,16 @@ export default function App() {
         )}
 
         <EmergencyChatbot userLocation={source} />
+        {loginOpen && (
+          <OperatorLogin
+            onClose={() => setLoginOpen(false)}
+            onUnlocked={() => {
+              setOperatorOk(true);
+              setLoginOpen(false);
+              showNotice('🔓 Operator mode unlocked.', 'info');
+            }}
+          />
+        )}
       </main>
     </div>
   );

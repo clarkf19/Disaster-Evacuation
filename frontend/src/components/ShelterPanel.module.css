@@ -174,8 +174,9 @@
   border: 1px solid var(--panel-border);
   background: #f8fafc;
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
   font-size: 0.75rem;
   color: var(--text-secondary);
 }
@@ -234,4 +235,54 @@
 
 @media (prefers-reduced-motion: reduce) {
   .arriving, .leaving { animation: none; }
+}
+
+.demoText {
+  min-width: 0;
+}
+
+.demoStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 6px !important;
+}
+
+.demoNote {
+  font-size: 0.68rem;
+  font-style: italic;
+}
+
+.demoActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.demoActions .demoToggle {
+  margin-left: 0;
+}
+
+.drillBtn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: none;
+  background: var(--google-blue);
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.drillBtn:disabled,
+.demoToggle:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.navBtnSet {
+  background: #166534;
+  border-color: #166534;
+  color: #ffffff;
 }

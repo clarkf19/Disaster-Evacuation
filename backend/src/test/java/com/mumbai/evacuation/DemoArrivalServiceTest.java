@@ -23,6 +23,8 @@ class DemoArrivalServiceTest {
 
     @AfterEach
     void reset() {
+        demo.stopDrill();
+        demo.setEnabled(false); // starting a drill switches demo mode (and its scheduler) on
         graphService.clearAllDisasters();
         shelterService.getAllShelters().forEach(Shelter::resetOccupancy);
     }
@@ -58,5 +60,27 @@ class DemoArrivalServiceTest {
         demo.tick();
         Shelter borivali = shelterService.getShelter(21).orElseThrow();
         assertEquals(0, borivali.getCurrentOccupancy());
+    }
+
+    @Test
+    void drillFillsSheltersWithoutChangingLiveHazards() {
+        demo.startDrill();
+        for (int i = 0; i < 30; i++) demo.tick();
+
+        assertTrue(graphService.getActiveDisasters().isEmpty(), "a drill must not add live hazards");
+        int sheltered = totalOccupancy();
+        assertTrue(sheltered > 20_000, "drill evacuees should be sheltered, got " + sheltered);
+        assertTrue(shelterService.getAllShelters().stream().anyMatch(s -> s.getCurrentOccupancy() == s.getTotalCapacity()),
+                "the shelters nearest the flooding spots should fill up");
+        for (Shelter s : shelterService.getAllShelters()) {
+            assertTrue(s.getCurrentOccupancy() <= s.getTotalCapacity(), s.getName() + " over capacity");
+        }
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> drill = (java.util.Map<String, Object>) demo.status().get("drill");
+        assertEquals("SHELTERED", drill.get("phase"), "everyone has moved after 30 ticks");
+
+        demo.stopDrill();
+        demo.tick();
+        assertTrue(totalOccupancy() < sheltered, "shelters empty once the drill ends");
     }
 }

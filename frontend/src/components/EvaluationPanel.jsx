@@ -34,7 +34,7 @@ export default function EvaluationPanel({ scenarioId, params }) {
   const [mc, setMc] = useState(null);
   const [mcRunning, setMcRunning] = useState(false);
 
-  const [parameter, setParameter] = useState('PERSONS_PER_VEHICLE');
+  const [parameter, setParameter] = useState('CAPACITY_SCALE');
   const [runsPerValue, setRunsPerValue] = useState(10);
   const [metric, setMetric] = useState('housedPercent');
   const [sens, setSens] = useState(null);
@@ -119,7 +119,8 @@ export default function EvaluationPanel({ scenarioId, params }) {
 
 function fmt(stat) {
   if (!stat) return '—';
-  return `${stat.mean != null ? stat.mean.toLocaleString() : '0'} ± ${stat.ci95 != null ? stat.ci95.toLocaleString() : '0'}`;
+  const n = v => (v != null ? v.toLocaleString(undefined, { maximumFractionDigits: 1 }) : '0');
+  return `${n(stat.mean)} ± ${n(stat.ci95)}`;
 }
 
 function MonteCarloTable({ result }) {

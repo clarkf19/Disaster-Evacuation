@@ -1,0 +1,94 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.dialog {
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  width: min(420px, 100%);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dialog h2 {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.text {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.label {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.input {
+  padding: 10px 12px;
+  border: 1.5px solid var(--panel-border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--google-blue);
+}
+
+.error {
+  font-size: 0.8rem;
+  color: var(--google-red);
+  font-weight: 600;
+}
+
+.hint {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.cancel,
+.submit {
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--panel-border);
+  background: #ffffff;
+  color: var(--text-primary);
+}
+
+.submit {
+  background: var(--google-blue);
+  border-color: var(--google-blue);
+  color: #ffffff;
+}
+
+.submit:disabled {
+  opacity: 0.55;
+  cursor: default;
+}

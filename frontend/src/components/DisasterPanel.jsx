@@ -14,61 +14,27 @@ const MIN_RADIUS = 50;
 const MAX_RADIUS = 10000;
 
 /**
- * DisasterPanel — place/remove live hazard zones (operator token required when
- * the backend is configured with one) and browse protection guides, first aid
- * and emergency hospital numbers.
+ * DisasterPanel — place/remove live hazard zones (operator mode only) and browse
+ * protection guides, first aid and emergency hospital numbers.
  */
-export default function DisasterPanel({ disasters, operatorTokenRequired, onDisastersChange, onPlaceMode, onError }) {
+export default function DisasterPanel({ disasters, operatorMode, onLogin, runOperatorAction, onPlaceMode }) {
   const [type,   setType]   = useState('FLOOD');
   const [radius, setRadius] = useState(1000);
   const [action, setAction] = useState('block');
   const [loading, setLoading] = useState(false);
   const [panelView, setPanelView] = useState('both'); // 'both' | 'report' | 'protection'
-  const [token, setToken] = useState(API.getOperatorToken());
 
   const radiusValid = Number.isFinite(radius) && radius >= MIN_RADIUS && radius <= MAX_RADIUS;
 
-  function describe(e) {
-    return e.status === 401 ? 'Operator token missing or wrong.' : e.message;
-  }
-
-  async function handleRemove(id) {
-    try {
-      await API.removeDisaster(id);
-    } catch (e) {
-      onError?.(`Could not remove hazard: ${describe(e)}`);
-    }
-    onDisastersChange();
-  }
-
-  async function handleClearAll() {
+  async function run(apiCall, failureText) {
     setLoading(true);
-    try {
-      await API.clearAllDisasters();
-    } catch (e) {
-      onError?.(`Could not clear hazards: ${describe(e)}`);
-    } finally {
-      setLoading(false);
-      onDisastersChange();
-    }
+    await runOperatorAction(apiCall, failureText);
+    setLoading(false);
   }
 
-  async function handleMonsoon() {
-    setLoading(true);
-    try {
-      await API.activateMonsoonHotspots();
-    } catch (e) {
-      onError?.(`Could not activate monsoon hotspots: ${describe(e)}`);
-    } finally {
-      setLoading(false);
-      onDisastersChange();
-    }
-  }
-
-  function saveToken(value) {
-    setToken(value);
-    API.setOperatorToken(value.trim());
-  }
+  const handleRemove = id => run(() => API.removeDisaster(id), 'Could not remove the hazard');
+  const handleClearAll = () => run(API.clearAllDisasters, 'Could not clear the hazards');
+  const handleMonsoon = () => run(API.activateMonsoonHotspots, 'Could not flood the monsoon spots');
 
   return (
     <div className={styles.panelContainer}>
@@ -104,19 +70,12 @@ export default function DisasterPanel({ disasters, operatorTokenRequired, onDisa
               To experiment privately, use the 📊 Command tab instead.
             </p>
 
-            {operatorTokenRequired && (
-              <>
-                <label className={styles.label} htmlFor="operator-token">Operator Token</label>
-                <input
-                  id="operator-token"
-                  className={styles.input}
-                  type="password"
-                  autoComplete="off"
-                  placeholder="Required to change live hazards"
-                  value={token}
-                  onChange={e => saveToken(e.target.value)}
-                />
-              </>
+            {!operatorMode && (
+              <div className={styles.lockedCard}>
+                <b>🔒 Operators only</b>
+                <p>Placing a hazard changes routes for everyone using the site, so it needs operator login.</p>
+                <button className={styles.btnUnlock} onClick={onLogin}>🔒 Operator login</button>
+              </div>
             )}
 
             <label className={styles.label} htmlFor="hazard-type">Hazard Type</label>
@@ -151,7 +110,7 @@ export default function DisasterPanel({ disasters, operatorTokenRequired, onDisa
             <button
               className={styles.btnDanger}
               onClick={() => onPlaceMode({ type, radius, action })}
-              disabled={!radiusValid || (operatorTokenRequired && !token.trim())}
+              disabled={!radiusValid || !operatorMode}
             >
               📍 Click Map to Place Hazard
             </button>
@@ -159,7 +118,7 @@ export default function DisasterPanel({ disasters, operatorTokenRequired, onDisa
             <button
               className={styles.btnSmall}
               onClick={handleMonsoon}
-              disabled={loading || (operatorTokenRequired && !token.trim())}
+              disabled={loading || !operatorMode}
               title="Floods every chronic water-logging spot at once; nearby low-lying roads slow down"
             >
               💧 Simulate a heavy monsoon day (flood all chronic spots)
@@ -171,7 +130,7 @@ export default function DisasterPanel({ disasters, operatorTokenRequired, onDisa
             <div className={styles.row}>
               <h3>Active Hazards ({disasters.length})</h3>
               {disasters.length > 0 && (
-                <button className={styles.btnSmall} onClick={handleClearAll} disabled={loading}>
+                <button className={styles.btnSmall} onClick={handleClearAll} disabled={loading || !operatorMode}>
                   Clear All
                 </button>
               )}
@@ -188,6 +147,8 @@ export default function DisasterPanel({ disasters, operatorTokenRequired, onDisa
                     </span>
                     <button
                       className={styles.removeBtn}
+                      disabled={!operatorMode}
+                      title={operatorMode ? 'Remove this hazard' : 'Operator login needed'}
                       onClick={() => handleRemove(d.id)}
                       aria-label={`Remove ${d.type} hazard`}
                     >✕</button>

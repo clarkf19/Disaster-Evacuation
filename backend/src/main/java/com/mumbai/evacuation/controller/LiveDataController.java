@@ -1,6 +1,7 @@
 package com.mumbai.evacuation.controller;
 
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.LinkedHashMap;
@@ -34,6 +35,16 @@ public class LiveDataController {
         m.put("shelters", shelterController.getAllShelters());
         m.put("disasters", disasterController.listDisasters());
         m.put("stations", layerController.stations());
+        m.put("demo", shelterController.demoStatus());
         return m;
+    }
+
+    /**
+     * POST /api/operator/verify — 200 when the X-Admin-Token header is right (the admin-token
+     * interceptor answers 401 otherwise), so the UI can confirm a token before using it.
+     */
+    @PostMapping("/api/operator/verify")
+    public Map<String, Object> verifyOperator() {
+        return Map.of("valid", true);
     }
 }

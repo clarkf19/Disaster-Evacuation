@@ -25,6 +25,10 @@ import java.util.*;
  * counted as unplaced. With no active hazards, shelters slowly empty as people
  * return home.
  *
+ * An <b>evacuation drill</b> does the same without touching live routing:
+ * residents around every chronic monsoon flooding spot head to their nearest
+ * shelters, the shelters stay full for a while, then everyone goes home.
+ *
  * This is a visual simulation, not real data — the UI labels it as such.
  */
 @Service
@@ -35,27 +39,43 @@ public class DemoArrivalService {
     static final double PEOPLE_PER_KM2 = 25_000;   // dense urban Mumbai, order of magnitude
     static final double EVACUATING_SHARE = 0.15;   // share of residents who go to a public shelter
     static final int MAX_POOL = 60_000;
+    /** Residents evacuating from around each monsoon hotspot during a drill. */
+    static final int DRILL_PEOPLE_PER_SPOT = 3_000;
+    /** How long shelters stay occupied after the last drill arrivals, before people go home. */
+    static final long DRILL_HOLD_MS = 90_000;
 
     private final GraphService graphService;
     private final ShelterService shelterService;
+    private final FloodHotspotService hotspotService;
     private final DijkstraEngine dijkstra = new DijkstraEngine();
     private final Random random = new Random();
 
     private volatile boolean enabled;
 
-    /** People still waiting to reach a shelter, per disaster id. */
+    /** One place people leave from: a live hazard zone or a drill hotspot. */
+    private record Origin(String id, String name, double lat, double lon) {}
+
+    /** People still waiting to reach a shelter, per origin id. */
     private final Map<String, Integer> pools = new HashMap<>();
+    private final Map<String, Integer> initialPools = new HashMap<>();
     private final Map<String, Integer> unplaced = new HashMap<>();
-    /** Shelter ids by travel time from each disaster, valid for one hazard snapshot. */
+    /** Shelter ids by travel time from each origin, valid for one hazard snapshot. */
     private final Map<String, List<Long>> rankings = new HashMap<>();
     private HazardOverlay rankedFor;
     /** Arrivals (positive) or departures (negative) per shelter in the latest tick. */
     private volatile Map<Long, Integer> lastTickChange = Map.of();
 
+    /** Drill origins (empty when no drill is running) and when the last drill arrivals happened. */
+    private List<Origin> drillOrigins = List.of();
+    private long drillSettledAt = -1;
+    private int drillTotal;
+
     public DemoArrivalService(GraphService graphService, ShelterService shelterService,
+                              FloodHotspotService hotspotService,
                               @Value("${demo.enabled:true}") boolean enabled) {
         this.graphService = graphService;
         this.shelterService = shelterService;
+        this.hotspotService = hotspotService;
         this.enabled = enabled;
         if (enabled) log.info("Demo mode ON: shelter occupancy is simulated from active hazard zones.");
     }
@@ -75,7 +95,62 @@ public class DemoArrivalService {
         m.put("enabled", enabled);
         m.put("waiting", pools.values().stream().mapToInt(Integer::intValue).sum());
         m.put("unplaced", unplaced.values().stream().mapToInt(Integer::intValue).sum());
+        m.put("sheltered", shelterService.getAllShelters().stream().mapToInt(Shelter::getCurrentOccupancy).sum());
+        Map<String, Object> drill = new LinkedHashMap<>();
+        drill.put("active", isDrillActive());
+        drill.put("phase", drillPhase());
+        drill.put("evacuees", drillTotal);
+        drill.put("origins", drillOrigins.size());
+        m.put("drill", drill);
         return m;
+    }
+
+    /**
+     * Starts an evacuation drill: residents around every chronic monsoon flooding spot head to
+     * their nearest safe shelters. Also switches demo mode on, since the drill runs on its ticks.
+     */
+    public synchronized Map<String, Object> startDrill() {
+        stopDrillInternal();
+        List<Origin> origins = hotspotService.getHotspots().stream()
+                .map(h -> new Origin("drill-" + h.id(), h.name(), h.lat(), h.lon()))
+                .toList();
+        for (Origin o : origins) {
+            pools.put(o.id(), DRILL_PEOPLE_PER_SPOT);
+            initialPools.put(o.id(), DRILL_PEOPLE_PER_SPOT);
+        }
+        drillOrigins = origins;
+        drillTotal = origins.size() * DRILL_PEOPLE_PER_SPOT;
+        drillSettledAt = -1;
+        enabled = true;
+        log.info("Evacuation drill started: {} people from {} flooding spots", drillTotal, origins.size());
+        tick(); // first arrivals straight away
+        return status();
+    }
+
+    /** Ends the drill; people already in shelters go home over the next ticks. */
+    public synchronized Map<String, Object> stopDrill() {
+        stopDrillInternal();
+        return status();
+    }
+
+    private void stopDrillInternal() {
+        for (Origin o : drillOrigins) {
+            pools.remove(o.id());
+            initialPools.remove(o.id());
+            unplaced.remove(o.id());
+            rankings.remove(o.id());
+        }
+        drillOrigins = List.of();
+        drillSettledAt = -1;
+        drillTotal = 0;
+    }
+
+    private boolean isDrillActive() { return !drillOrigins.isEmpty(); }
+
+    /** ARRIVING while people are on their way, SHELTERED while shelters hold them, or NONE. */
+    private String drillPhase() {
+        if (!isDrillActive()) return "NONE";
+        return drillSettledAt < 0 ? "ARRIVING" : "SHELTERED";
     }
 
     @Scheduled(fixedDelayString = "${demo.tick-ms:4000}", initialDelayString = "${demo.tick-ms:4000}")
@@ -89,23 +164,49 @@ public class DemoArrivalService {
         List<DisasterEvent> disasters = overlay.getDisasters();
         Map<Long, Integer> change = new HashMap<>();
 
-        // Forget disasters that were removed; add pools for new ones.
+        // Forget hazards that were removed; add pools for new ones.
         Set<String> activeIds = new HashSet<>();
         disasters.forEach(d -> activeIds.add(d.getId()));
+        drillOrigins.forEach(o -> activeIds.add(o.id()));
         pools.keySet().retainAll(activeIds);
+        initialPools.keySet().retainAll(activeIds);
         unplaced.keySet().retainAll(activeIds);
-        for (DisasterEvent d : disasters) pools.computeIfAbsent(d.getId(), id -> initialPool(d));
+        for (DisasterEvent d : disasters) {
+            if (!pools.containsKey(d.getId())) {
+                int pool = initialPool(d);
+                pools.put(d.getId(), pool);
+                initialPools.put(d.getId(), pool);
+            }
+        }
 
-        if (disasters.isEmpty()) {
+        if (overlay != rankedFor) {
+            rankings.clear();
+            rankedFor = overlay;
+        }
+        List<Origin> origins = new ArrayList<>();
+        for (DisasterEvent d : disasters) {
+            origins.add(new Origin(d.getId(), d.getDescription(), d.getCenterLatitude(), d.getCenterLongitude()));
+        }
+        origins.addAll(drillOrigins);
+
+        if (origins.isEmpty()) {
             drain(change);
         } else {
-            if (overlay != rankedFor) {
-                rankings.clear();
-                rankedFor = overlay;
-            }
-            for (DisasterEvent d : disasters) arrive(d, overlay, change);
+            for (Origin o : origins) arrive(o, overlay, change);
         }
+        updateDrill();
         lastTickChange = Map.copyOf(change);
+    }
+
+    /** Once every drill evacuee has arrived (or been turned away), hold, then send everyone home. */
+    private void updateDrill() {
+        if (!isDrillActive()) return;
+        boolean everyoneMoved = drillOrigins.stream().allMatch(o -> pools.getOrDefault(o.id(), 0) <= 0);
+        if (everyoneMoved && drillSettledAt < 0) drillSettledAt = System.currentTimeMillis();
+        if (drillSettledAt >= 0 && System.currentTimeMillis() - drillSettledAt >= DRILL_HOLD_MS) {
+            log.info("Evacuation drill finished; shelters will empty");
+            stopDrillInternal();
+        }
     }
 
     static int initialPool(DisasterEvent d) {
@@ -113,15 +214,15 @@ public class DemoArrivalService {
         return (int) Math.min(MAX_POOL, Math.round(areaKm2 * PEOPLE_PER_KM2 * EVACUATING_SHARE));
     }
 
-    private void arrive(DisasterEvent d, HazardOverlay overlay, Map<Long, Integer> change) {
-        int waiting = pools.getOrDefault(d.getId(), 0);
+    private void arrive(Origin origin, HazardOverlay overlay, Map<Long, Integer> change) {
+        int waiting = pools.getOrDefault(origin.id(), 0);
         if (waiting <= 0) return;
-        int initial = Math.max(1, initialPool(d));
+        int initial = Math.max(1, initialPools.getOrDefault(origin.id(), waiting));
         // 3–8 % of the original pool per tick, at least 25 people.
         int batch = Math.min(waiting, Math.max(25, (int) (initial * (0.03 + random.nextDouble() * 0.05))));
 
         int remaining = batch;
-        for (long shelterId : ranking(d, overlay)) {
+        for (long shelterId : ranking(origin, overlay)) {
             if (remaining <= 0) break;
             Shelter s = shelterService.getShelter(shelterId).orElse(null);
             if (s == null || overlay.isShelterUnsafe(s)) continue;
@@ -131,14 +232,14 @@ public class DemoArrivalService {
                 remaining -= admitted;
             }
         }
-        if (remaining > 0) unplaced.merge(d.getId(), remaining, Integer::sum);
-        pools.put(d.getId(), waiting - batch);
+        if (remaining > 0) unplaced.merge(origin.id(), remaining, Integer::sum);
+        pools.put(origin.id(), waiting - batch);
     }
 
-    /** Reachable safe shelters ordered by travel time from the disaster centre (one Dijkstra pass). */
-    private List<Long> ranking(DisasterEvent d, HazardOverlay overlay) {
-        return rankings.computeIfAbsent(d.getId(), id -> {
-            GraphService.Snap snap = graphService.snap(d.getCenterLatitude(), d.getCenterLongitude());
+    /** Reachable safe shelters ordered by travel time from the origin (one Dijkstra pass). */
+    private List<Long> ranking(Origin origin, HazardOverlay overlay) {
+        return rankings.computeIfAbsent(origin.id(), id -> {
+            GraphService.Snap snap = graphService.snap(origin.lat(), origin.lon());
             if (snap.node() == null) return List.of();
             List<Shelter> candidates = shelterService.getAllShelters().stream()
                     .filter(s -> s.getNearestNodeId() >= 0 && !overlay.isShelterUnsafe(s)).toList();
@@ -155,7 +256,7 @@ public class DemoArrivalService {
         });
     }
 
-    /** No active hazards: about 5 % of each shelter's occupants go home per tick. */
+    /** Nothing driving arrivals: about 5 % of each shelter's occupants go home per tick. */
     private void drain(Map<Long, Integer> change) {
         for (Shelter s : shelterService.getAllShelters()) {
             int occupancy = s.getCurrentOccupancy();

@@ -36,6 +36,12 @@ function makePinIcon(color) {
 }
 
 const sourceIcon = makePinIcon('#1a73e8');
+const hotspotIcon = L.divIcon({
+  className: '',
+  html: '<div style="width:22px;height:22px;border-radius:50%;background:#e0f2fe;border:2px solid #0284c7;display:flex;align-items:center;justify-content:center;font-size:12px;box-shadow:0 2px 6px rgba(0,0,0,0.25)">💧</div>',
+  iconSize: [22, 22],
+  iconAnchor: [11, 11],
+});
 const destIcon   = makePinIcon('#ea4335');
 
 function shelterColor(pct, unsafe) {
@@ -190,6 +196,40 @@ function SimulationLayer({ simulation }) {
   );
 }
 
+/** Stations on a train itinerary: where to board (green), change (purple) and get off (red). */
+function TrainStops({ legs }) {
+  const trains = (legs || []).filter(l => l.type === 'TRAIN' && l.stations?.length > 1);
+  if (trains.length === 0) return null;
+  const markers = [];
+  trains.forEach((leg, li) => {
+    leg.stations.forEach((s, si) => {
+      const first = si === 0, last = si === leg.stations.length - 1;
+      if (first && li > 0) return; // same station as the previous leg's last stop
+      const role = first && li === 0 ? 'board'
+        : last && li === trains.length - 1 ? 'alight'
+        : last ? 'change' : 'pass';
+      markers.push({ ...s, role, line: last && li < trains.length - 1 ? trains[li + 1].line : leg.line });
+    });
+  });
+  const style = {
+    board:  { radius: 8, fillColor: '#16a34a', label: 'Board the' },
+    change: { radius: 8, fillColor: '#7c3aed', label: 'Change to the' },
+    alight: { radius: 8, fillColor: '#dc2626', label: 'Get off · arrived by' },
+    pass:   { radius: 4, fillColor: '#ffffff', label: 'Stop on the' },
+  };
+  return markers.map((m, i) => {
+    const st = style[m.role];
+    return (
+      <CircleMarker key={`stop-${i}`} center={[m.lat, m.lon]} radius={st.radius}
+                    pathOptions={{ color: '#7c3aed', weight: 2.5, fillColor: st.fillColor, fillOpacity: 1 }}>
+        <Tooltip direction="top" permanent={m.role !== 'pass'} offset={[0, -6]}>
+          🚆 <b>{m.name}</b>{m.role !== 'pass' && <><br /><small>{st.label} {m.line}</small></>}
+        </Tooltip>
+      </CircleMarker>
+    );
+  });
+}
+
 function LayerToggles({ layers, onToggleLayer, hasHotspots, hasStations }) {
   if (!onToggleLayer || (!hasHotspots && !hasStations)) return null;
   return (
@@ -206,6 +246,13 @@ function LayerToggles({ layers, onToggleLayer, hasHotspots, hasStations }) {
           🚆 Suburban stations
         </label>
       )}
+      <div className="map-legend" aria-label="Shelter colours">
+        <span className="map-legend-title">Shelters</span>
+        <span><i style={{ background: '#34a853' }} /> space</span>
+        <span><i style={{ background: '#f97316' }} /> 70%+ full</span>
+        <span><i style={{ background: '#ea4335' }} /> 90%+ full</span>
+        <span><i style={{ background: '#94a3b8' }} /> unsafe</span>
+      </div>
     </div>
   );
 }
@@ -259,17 +306,20 @@ export default function MapView({
 
       {/* ── Route segments, coloured by traffic / hazard factor ── */}
       {layers.hotspots && hotspots.map(h => (
-        <Circle
-          key={h.id}
-          center={[h.lat, h.lon]}
-          radius={h.radiusMeters}
-          pathOptions={{ color: '#0284c7', fillColor: '#38bdf8', fillOpacity: 0.25, weight: 1.5, dashArray: '4 4' }}
-        >
-          <Tooltip>
-            💧 {h.name}{h.elevationM != null ? ` · ${Math.round(h.elevationM)} m` : ''}<br />
-            <small>Chronic monsoon water-logging spot (approximate)</small>
-          </Tooltip>
-        </Circle>
+        <Fragment key={h.id}>
+          <Circle
+            center={[h.lat, h.lon]}
+            radius={h.radiusMeters}
+            pathOptions={{ color: '#0284c7', fillColor: '#38bdf8', fillOpacity: 0.25, weight: 1.5, dashArray: '4 4' }}
+          />
+          {/* A marker keeps the spot visible when the 350 m circle is a speck at city zoom. */}
+          <Marker position={[h.lat, h.lon]} icon={hotspotIcon}>
+            <Tooltip>
+              💧 <b>{h.name}</b>{h.elevationM != null ? ` · ${Math.round(h.elevationM)} m above sea level` : ''}<br />
+              <small>Chronic monsoon water-logging spot (approximate)</small>
+            </Tooltip>
+          </Marker>
+        </Fragment>
       ))}
 
       {layers.stations && stations.map(st => (
@@ -289,6 +339,7 @@ export default function MapView({
       {routeResult?.segments?.map((seg, i) => (
         <Polyline key={`seg-${i}`} positions={seg.points} pathOptions={segmentStyle(seg)} />
       ))}
+      <TrainStops legs={routeResult?.legs} />
       {routeResult?.points?.length > 1 && !routeResult?.segments?.length && (
         <Polyline positions={routeResult.points} pathOptions={{ color: '#1a73e8', weight: 6, opacity: 0.9 }} />
       )}

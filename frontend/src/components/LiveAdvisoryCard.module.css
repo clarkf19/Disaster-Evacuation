@@ -79,10 +79,35 @@
   color: #334155;
 }
 
-.legs li span:last-child {
+.legTime {
   font-weight: 700;
   color: #1e293b;
   white-space: nowrap;
+  text-align: right;
+}
+
+.legTime small {
+  display: block;
+  font-weight: 500;
+  font-size: 0.66rem;
+  color: #64748b;
+}
+
+.legDetail {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+.stopList {
+  margin-top: 3px;
+}
+
+.stopList summary {
+  cursor: pointer;
+  color: #7c3aed;
+  font-weight: 600;
 }
 
 .warnings {

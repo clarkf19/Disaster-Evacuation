@@ -193,4 +193,39 @@ class ApiTest {
                 .andExpect(jsonPath("$.liveTrafficEnabled").value(false));
         mvc.perform(get("/actuator/health")).andExpect(status().isOk());
     }
+
+    @Test
+    void operatorTokenCanBeVerified() throws Exception {
+        mvc.perform(post("/api/operator/verify")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/operator/verify").header("X-Admin-Token", "wrong")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/operator/verify").header("X-Admin-Token", "test-token"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(true));
+    }
+
+    @Test
+    void drillNeedsTheOperatorToken() throws Exception {
+        mvc.perform(post("/api/shelters/demo/drill")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/shelters/demo/drill").header("X-Admin-Token", "test-token"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.drill.active").value(true));
+        mvc.perform(delete("/api/shelters/demo/drill").header("X-Admin-Token", "test-token"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.drill.active").value(false));
+        mvc.perform(post("/api/shelters/demo").header("X-Admin-Token", "test-token")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":false}")).andExpect(status().isOk());
+    }
+
+    @Test
+    void sharedTrackStaysOnOneLine() throws Exception {
+        // Andheri -> Dadar: Harbour and Western lines share the track to Mahim, but one Western Line train does it all.
+        String body = "{\"fromLat\":19.1197,\"fromLon\":72.8464,\"toLat\":19.0178,\"toLon\":72.8478,\"mode\":\"TRANSIT\"}";
+        String json = mvc.perform(post("/api/live-route").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        JsonNode trains = objectMapper.createArrayNode();
+        for (JsonNode leg : objectMapper.readTree(json).path("legs")) {
+            if ("TRAIN".equals(leg.path("type").asText())) ((com.fasterxml.jackson.databind.node.ArrayNode) trains).add(leg);
+        }
+        assertEquals(1, trains.size(), "expected one train ride: " + json);
+        assertEquals("Western Line", trains.get(0).path("line").asText());
+        assertEquals("Dadar", trains.get(0).path("toName").asText());
+        assertEquals(trains.get(0).path("stops").asInt() + 1, trains.get(0).path("stations").size());
+    }
 }
