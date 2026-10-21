@@ -35,6 +35,7 @@ public class EmergencyChatbotService {
 
     private static final Logger log = LoggerFactory.getLogger(EmergencyChatbotService.class);
     private static final String GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
+    private static final int MAX_OUTPUT_TOKENS = 1024;
 
     private final GraphService graphService;
     private final ShelterService shelterService;
@@ -212,10 +213,14 @@ public class EmergencyChatbotService {
     /** Calls Gemini with the system context as a system instruction. Returns null on any failure. */
     private String callGeminiApi(String systemContext, String userQuery) {
         try {
+            // Gemini 2.5 "thinking" tokens count against maxOutputTokens, which cut answers off
+            // mid-word; Flash models can switch thinking off, which also makes replies faster.
+            Map<String, Object> generationConfig = new java.util.HashMap<>(Map.of("temperature", 0.3, "maxOutputTokens", MAX_OUTPUT_TOKENS));
+            if (geminiModel.contains("flash")) generationConfig.put("thinkingConfig", Map.of("thinkingBudget", 0));
             Map<String, Object> requestBody = Map.of(
                     "systemInstruction", Map.of("parts", List.of(Map.of("text", systemContext))),
                     "contents", List.of(Map.of("role", "user", "parts", List.of(Map.of("text", userQuery)))),
-                    "generationConfig", Map.of("temperature", 0.3, "maxOutputTokens", 700));
+                    "generationConfig", generationConfig);
 
             HttpRequest httpRequest = HttpRequest.newBuilder()
                     .uri(URI.create(GEMINI_BASE_URL + geminiModel + ":generateContent"))
@@ -230,9 +235,11 @@ public class EmergencyChatbotService {
                 log.warn("Gemini model {} returned HTTP {}", geminiModel, response.statusCode());
                 return null;
             }
-            JsonNode text = objectMapper.readTree(response.body())
-                    .path("candidates").path(0).path("content").path("parts").path(0).path("text");
-            return text.isMissingNode() ? null : text.asText();
+            JsonNode candidate = objectMapper.readTree(response.body()).path("candidates").path(0);
+            JsonNode text = candidate.path("content").path("parts").path(0).path("text");
+            if (text.isMissingNode()) return null;
+            String reply = text.asText();
+            return "MAX_TOKENS".equals(candidate.path("finishReason").asText()) ? endAtLastCompleteLine(reply) : reply;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return null;
@@ -240,6 +247,13 @@ public class EmergencyChatbotService {
             log.warn("Gemini call failed: {}", e.getClass().getSimpleName());
             return null;
         }
+    }
+
+    /** A reply that hit the length limit ends at its last full line instead of mid-word. */
+    static String endAtLastCompleteLine(String reply) {
+        int cut = reply.lastIndexOf('\n');
+        String kept = cut > 0 ? reply.substring(0, cut).stripTrailing() : reply;
+        return kept + "\n\n_(Answer shortened — ask a follow-up question for more.)_";
     }
 
     /**
